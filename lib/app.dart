@@ -43,8 +43,10 @@ class _KioskAppState extends State<KioskApp> {
 
   void _onIdle() {
     final nav = _nav.currentState;
-    if (nav == null || !nav.canPop())
-      return _resetIdle(); // على الشاشة الرئيسية لا حاجة
+    if (nav == null || !nav.canPop()) {
+      _resetIdle(); // على الشاشة الرئيسية لا حاجة
+      return;
+    }
     _warning = true;
     _warn = Timer(widget.warnFor, () {
       _closeWarning();
