@@ -5,7 +5,15 @@ import 'common.dart';
 
 /// لوحة أرقام داخلية (الكيوسك لا يعتمد على لوحة مفاتيح النظام).
 class NumPad extends StatelessWidget {
-  const NumPad({super.key, required this.onDigit, required this.onBackspace});
+  const NumPad({
+    super.key,
+    required this.onDigit,
+    required this.onBackspace,
+    this.glass = false,
+  });
+
+  /// أزرار شفافة (للعرض فوق صورة).
+  final bool glass;
   final void Function(String) onDigit;
   final VoidCallback onBackspace;
 
@@ -20,8 +28,10 @@ class NumPad extends StatelessWidget {
         child: Container(
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: HColors.border),
+            color: glass ? const Color(0x33FFFFFF) : Colors.white,
+            border: Border.all(
+              color: glass ? const Color(0x99FFFFFF) : HColors.border,
+            ),
             borderRadius: BorderRadius.circular(context.d(24)),
           ),
           child: child,
@@ -31,7 +41,10 @@ class NumPad extends StatelessWidget {
     Widget digit(String d) => key(
       Text(
         d,
-        style: TextStyle(fontSize: context.d(46), color: HColors.ink),
+        style: TextStyle(
+          fontSize: context.d(46),
+          color: glass ? Colors.white : HColors.ink,
+        ),
       ),
       () => onDigit(d),
       Key('key_$d'),
@@ -52,7 +65,7 @@ class NumPad extends StatelessWidget {
             Icon(
               Icons.backspace_outlined,
               size: context.d(44),
-              color: HColors.ink,
+              color: glass ? Colors.white : HColors.ink,
             ),
             onBackspace,
             const Key('key_back'),

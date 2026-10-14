@@ -115,10 +115,14 @@ class _AmountPopupState extends State<AmountPopup> {
                     height: context.d(120),
                     padding: EdgeInsets.symmetric(horizontal: context.d(32)),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: hasBg ? const Color(0x33FFFFFF) : Colors.white,
                       borderRadius: BorderRadius.circular(context.d(28)),
                       border: Border.all(
-                        color: _amount == 0 ? HColors.border : HColors.teal,
+                        color: hasBg
+                            ? (_amount == 0
+                                  ? const Color(0x99FFFFFF)
+                                  : Colors.white)
+                            : (_amount == 0 ? HColors.border : HColors.teal),
                         width: context.d(_amount == 0 ? 2 : 3),
                       ),
                     ),
@@ -135,9 +139,13 @@ class _AmountPopupState extends State<AmountPopup> {
                               fontWeight: _amount == 0
                                   ? FontWeight.w400
                                   : FontWeight.w700,
-                              color: _amount == 0
-                                  ? const Color(0xFFB8C4C2)
-                                  : HColors.teal,
+                              color: hasBg
+                                  ? (_amount == 0
+                                        ? const Color(0xCCFFFFFF)
+                                        : Colors.white)
+                                  : (_amount == 0
+                                        ? const Color(0xFFB8C4C2)
+                                        : HColors.teal),
                             ),
                           ),
                         ),
@@ -145,14 +153,18 @@ class _AmountPopupState extends State<AmountPopup> {
                           s.sar,
                           style: TextStyle(
                             fontSize: context.d(34),
-                            color: HColors.muted,
+                            color: hasBg ? Colors.white : HColors.muted,
                           ),
                         ),
                       ],
                     ),
                   ),
                   SizedBox(height: context.d(20)),
-                  NumPad(onDigit: _digit, onBackspace: _backspace),
+                  NumPad(
+                    onDigit: _digit,
+                    onBackspace: _backspace,
+                    glass: hasBg,
+                  ),
                   SizedBox(height: context.d(20)),
                   PrimaryButton(
                     key: const Key('popup_donate'),
