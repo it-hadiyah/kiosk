@@ -16,7 +16,7 @@
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --brand: #2cc4b3; --brand-strong: #2cc4b3; --on-brand: #04211e; --brand-soft: #173533; --brand-line: #2a5753;
     --ink: #dff2ef; --text: #d3e4e2; --muted: #9db6b3;
     --bg: #0e1918; --card: #152625; --card2: #1a2e2d; --line: #2a403e; --line2: #38524f;
@@ -27,6 +27,17 @@
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3); --shadow-lg: 0 10px 40px rgba(0,0,0,.6);
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+    --brand: #2cc4b3; --brand-strong: #2cc4b3; --on-brand: #04211e; --brand-soft: #173533; --brand-line: #2a5753;
+    --ink: #dff2ef; --text: #d3e4e2; --muted: #9db6b3;
+    --bg: #0e1918; --card: #152625; --card2: #1a2e2d; --line: #2a403e; --line2: #38524f;
+    --ok: #4cc27f; --ok-soft: #163325; --ok-ink: #7fe0a6;
+    --warn: #e0a640; --warn-soft: #3a2e12; --warn-ink: #f0c36d;
+    --danger: #ff8274; --danger-soft: #3b1d1a;
+    --info-soft: #173533; --info-ink: #7fe0d3;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3); --shadow-lg: 0 10px 40px rgba(0,0,0,.6);
+    color-scheme: dark;
 }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -152,7 +163,8 @@ legend { font-weight: 600; color: var(--muted); font-size: 13px; padding: 0; }
 .badge.kind { background: var(--info-soft); color: var(--info-ink); border-color: transparent; }
 .badge.cat { background: #efe9fb; color: #5a3ea0; border-color: transparent; }
 .badge.off { background: var(--warn-soft); color: var(--warn-ink); border-color: transparent; }
-@media (prefers-color-scheme: dark) { .badge.cat { background: #2c2548; color: #c6b6f5; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .badge.cat { background: #2c2548; color: #c6b6f5; } }
+:root[data-theme="dark"] .badge.cat { background: #2c2548; color: #c6b6f5; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px 3px 12px; background: var(--brand-soft); color: var(--brand-strong); border-radius: 99px; font-size: 13px; font-weight: 600; }
 [dir=rtl] .chip { padding: 3px 12px 3px 6px; }

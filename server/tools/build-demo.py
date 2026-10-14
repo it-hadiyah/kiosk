@@ -25,16 +25,20 @@ validate_wrapped = "const __validate = (function(){ const module = { exports: {}
 seed_block = "const SEED = " + json.dumps(seed, ensure_ascii=False) + ";\nconst EMBED = " + json.dumps(embed) + ";"
 demo = demo.replace('/* __VALIDATE__ */', validate_wrapped).replace('/* __SEED__ */', seed_block)
 
-def inline(tag_re, repl_fn, text):
-    return re.sub(tag_re, repl_fn, text, flags=re.S)
-
-out = html
-out = re.sub(r'<link[^>]+href="style\.css"[^>]*>', lambda m: '<style>\n' + css + '\n</style>', out)
-scripts = '<script>\n' + demo + '\n</script>\n<script>\n' + js + '\n</script>'
-if re.search(r'<script[^>]+src="app\.js"[^>]*></script>', out):
-    out = re.sub(r'<script[^>]+src="app\.js"[^>]*></script>', lambda m: scripts.replace('\\', '\\\\') if False else scripts, out)
-else:
-    raise SystemExit('app.js script tag not found in index.html')
+# --- الناتج: «محتوى» صفحة Artifact (الإطار والـ head يضيفهما النشر) ---
+m = re.search(r'<body[^>]*>(.*?)<script[^>]+src="app\.js"[^>]*></script>', html, re.S)
+body = m.group(1).strip()
+fonts = re.findall(r'<link[^>]+fonts\.(?:googleapis|gstatic)[^>]*>', html)
+artifact_css = """
+/* ===== نسخة Artifact: هامش جانبي آمن ===== */
+body { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+"""
+out = ('<title>لوحة تحكم كيوسك هدية</title>\n'
+       '<meta name="claude:viewport-fit-sides" content="cover">\n'
+       + '\n'.join(fonts) + '\n'
+       '<style>\n' + css + artifact_css + '</style>\n'
+       '<div id="hd-root" dir="rtl" lang="ar">\n' + body + '\n</div>\n'
+       '<script>\n' + demo + '\n</script>\n<script>\n' + js + '\n</script>\n')
 (root / 'dist').mkdir(exist_ok=True)
 dest = root / 'dist/admin-demo.html'
 dest.write_text(out, encoding='utf-8')

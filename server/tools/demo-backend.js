@@ -79,6 +79,11 @@
       await setDoc('catalog/draft', catalog);
       return { catalog };
     },
+    async saveFile(filename, text) {
+      const dl = await claude.use('downloads');
+      if (!dl) throw new Error('التنزيل غير متاح');
+      await dl.save({ filename, data: text });
+    },
     async fetchLive() { return getDoc('catalog/live'); },
     /* يحوّل الصورة لـ JPEG مصغّر (≤ 900px) ويحفظها في db ويعيد مساراً شبيهاً بمسار الخادم */
     async upload(file) {

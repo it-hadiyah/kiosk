@@ -970,7 +970,7 @@ async function doPublish() {
     if (!(await settleSaves())) throw Object.assign(new Error('تعذّر حفظ المسودة قبل النشر'), { shown: true });
     const r = await backend.publish();
     state.hasUnpublished = false; state.dirty = state.dirty && false; state.warnings = r.warnings || state.warnings;
-    toast('تم النشر ✓ — التغييرات ظاهرة الآن في الكيوسك'); hideErrors();
+    toast(backend.kind === 'demo' ? 'تم النشر ✓ (نسخة تجريبية — لا تصل لأي كيوسك)' : 'تم النشر ✓ — التغييرات ظاهرة الآن في الكيوسك'); hideErrors();
     ui.pubBusy = false; updateChrome(); await loadPublishData();
   } catch (e) {
     if (e.status === 401) showLogin('انتهت الجلسة، أعد تسجيل الدخول.');
@@ -989,7 +989,12 @@ async function doRestore(id) {
   } catch (e) { showErrors([e.message || 'تعذّر الاسترجاع'], 'تعذّر الاسترجاع'); }
   ui.restoreBusy = false; ui.forceRegions = true; refreshRegions(); ui.forceRegions = false;
 }
-function doExport() {
+async function doExport() {
+  const fname = `hadiyah-catalog-${new Date().toISOString().slice(0, 10)}.json`;
+  if (typeof backend.saveFile === 'function') { // الاستضافة تمنع روابط التنزيل: يوفّرها الـ backend
+    try { await backend.saveFile(fname, JSON.stringify(toPayload(), null, 2)); toast('تم تصدير المسودة'); } catch (e) { toast('لم يتم الحفظ'); }
+    return;
+  }
   const blob = new Blob([JSON.stringify(toPayload(), null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hadiyah-catalog-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); toast('تم تصدير المسودة');
