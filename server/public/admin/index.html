@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#00A092">
+<title>لوحة تحكم كيوسك هدية</title>
+<!-- الخط اختياري: عند انقطاع الإنترنت تُستخدم خطوط النظام -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#view">تخطَّ إلى المحتوى</a>
+
+<!-- شاشة الدخول (وضع الخادم فقط) -->
+<section id="login" class="login" hidden>
+  <form id="loginForm" class="login-card" autocomplete="on">
+    <div class="logo big" aria-hidden="true">هـ</div>
+    <h1>لوحة تحكم كيوسك هدية</h1>
+    <p class="muted">أدخل كلمة المرور للمتابعة</p>
+    <label for="loginPw">كلمة المرور</label>
+    <input id="loginPw" name="password" type="password" autocomplete="current-password" required dir="ltr">
+    <p id="loginErr" class="err" role="alert"></p>
+    <button class="btn primary block" type="submit" id="loginBtn">دخول</button>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">هـ</span>
+      <div class="brand-t">
+        <strong>لوحة تحكم كيوسك هدية</strong>
+        <small id="demoBadge" class="demo" hidden>وضع تجريبي (بيانات للتجربة فقط)</small>
+      </div>
+    </div>
+    <div class="top-status">
+      <span id="pill" class="pill"></span>
+      <span id="saveInd" class="saveind" aria-live="polite"></span>
+    </div>
+    <div class="top-actions">
+      <button id="btnPublish" class="btn primary" data-act="publish-top" type="button"></button>
+      <button id="btnLogout" class="btn ghost" data-act="logout" type="button"></button>
+    </div>
+  </header>
+  <nav id="nav" class="nav" aria-label="الأقسام"></nav>
+  <main id="main">
+    <div id="errPanel"></div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<div id="scrim" class="scrim" data-act="close-editor" hidden></div>
+<aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
+  <div class="drawer-head">
+    <h2 id="drawerTitle"></h2>
+    <button class="icon-btn" data-act="close-editor" type="button" aria-label="إغلاق"></button>
+  </div>
+  <div id="drawerBody" class="drawer-body"></div>
+  <div id="drawerFoot" class="drawer-foot"></div>
+</aside>
+
+<dialog id="dlg" class="dlg"><form method="dialog"><p id="dlgMsg"></p><div class="dlg-btns"><button class="btn ghost" value="no" id="dlgNo">إلغاء</button><button class="btn primary" value="yes" id="dlgYes">موافق</button></div></form></dialog>
+
+<div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+<div id="live" class="sr" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
