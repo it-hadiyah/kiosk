@@ -587,6 +587,7 @@ function summary(p) {
   const S = C().settings;
   if (p.kind === 'fixed') return `قيمة ثابتة: ${nf(p.price || 0)}` + (p.allowQuantity ? ` · كمية حتى ${p.maxQuantity}` : '');
   const own = p.presets.length; const arr = own ? p.presets : S.quickAmounts;
+  if (p.kind === 'open' && p.freeEntry) return 'المتبرع يكتب المبلغ مباشرةً';
   return (p.kind === 'open' ? 'مبلغ حر + ' : 'مبالغ: ') + arr.map(nf).join(' · ') + (own ? '' : ' (الافتراضية)');
 }
 function placementChips(p) {
@@ -675,7 +676,7 @@ function diffCatalogs(a, b) {
   const G = [];
   /* البرامج */
   const pg = { title: 'البرامج', items: [] }; G.push(pg);
-  const FL = { active: 'التفعيل', title: 'العناوين', image: 'الصورة', imageAlign: 'محاذاة الصورة', kind: 'النوع', price: 'القيمة', presets: 'المبالغ المحددة', minAmount: 'الحد الأدنى', maxAmount: 'الحد الأعلى', allowQuantity: 'خيار الكمية', maxQuantity: 'أقصى كمية' };
+  const FL = { active: 'التفعيل', title: 'العناوين', image: 'الصورة', imageAlign: 'محاذاة الصورة', kind: 'النوع', price: 'القيمة', presets: 'المبالغ المحددة', minAmount: 'الحد الأدنى', maxAmount: 'الحد الأعلى', allowQuantity: 'خيار الكمية', freeEntry: 'إدخال المبلغ مباشرة', maxQuantity: 'أقصى كمية' };
   const am = new Map(a.programs.map((p) => [p.id, p]));
   b.programs.forEach((p) => {
     const o = am.get(p.id); if (!o) return pg.items.push({ k: 'add', t: `إضافة برنامج ${nm(p)}` });
@@ -729,7 +730,7 @@ function diffCatalogs(a, b) {
    10) المحرّرات (Drawer)
    ===================================================================== */
 function newProgram() {
-  return { id: '', active: true, title: blankLoc(), image: '', imageAlign: 'center', kind: 'open', price: 0, presets: [], minAmount: 1, maxAmount: C().settings.maxAmount, allowQuantity: false, maxQuantity: 99 };
+  return { id: '', active: true, title: blankLoc(), image: '', imageAlign: 'center', kind: 'open', price: 0, presets: [], minAmount: 1, maxAmount: C().settings.maxAmount, allowQuantity: false, maxQuantity: 99, freeEntry: false };
 }
 function newCatalog() { return { id: '', active: true, title: blankLoc(), subtitle: blankLoc(), image: '', imageAlign: 'center', items: [] }; }
 
@@ -786,7 +787,8 @@ function programEditorHtml() {
   } else if (p.kind === 'presets') {
     cond = chipsEditor('prog:presets', 'المبالغ المحددة', 'إذا تركتها فارغة تُستخدم المبالغ السريعة العامة: ' + C().settings.quickAmounts.map(nf).join('، '));
   } else {
-    cond = `${chipsEditor('prog:presets', 'مبالغ سريعة خاصة بهذا البرنامج (اختياري)', 'إذا تركتها فارغة تُستخدم المبالغ السريعة العامة: ' + C().settings.quickAmounts.map(nf).join('، '))}
+    cond = `<label class="check"><input type="checkbox" data-ctx="prog" data-f="freeEntry" data-rerender ${p.freeEntry ? 'checked' : ''}><span>بلا مبالغ جاهزة — يكتب المتبرع المبلغ مباشرةً (مثل الزكاة والصدقة)</span></label>
+      ${p.freeEntry ? '' : chipsEditor('prog:presets', 'مبالغ سريعة خاصة بهذا البرنامج (اختياري)', 'إذا تركتها فارغة تُستخدم المبالغ السريعة العامة: ' + C().settings.quickAmounts.map(nf).join('، '))}
       <div class="grid2">${numField('prog', 'minAmount', 'أقل مبلغ', p.minAmount, { min: 1 })}${numField('prog', 'maxAmount', 'أعلى مبلغ', p.maxAmount, { min: 1 })}</div>`;
   }
   return `<div class="stack">

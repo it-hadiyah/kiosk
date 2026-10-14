@@ -141,7 +141,8 @@ const kDefaultCatalogJson = r'''{
       "minAmount": 1,
       "maxAmount": 99999,
       "allowQuantity": false,
-      "maxQuantity": 99
+      "maxQuantity": 99,
+      "freeEntry": true
     },
     {
       "id": "sadaqah",
@@ -160,7 +161,8 @@ const kDefaultCatalogJson = r'''{
       "minAmount": 1,
       "maxAmount": 99999,
       "allowQuantity": false,
-      "maxQuantity": 99
+      "maxQuantity": 99,
+      "freeEntry": true
     }
   ],
   "catalogs": [
@@ -258,5 +260,4 @@ const kDefaultCatalogJson = r'''{
       }
     ]
   }
-}
-''';
+}''';

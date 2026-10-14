@@ -93,6 +93,7 @@ class Program {
     this.maxAmount = 99999,
     this.allowQuantity = false,
     this.maxQuantity = 99,
+    this.freeEntry = false,
     this.active = true,
   });
 
@@ -108,6 +109,9 @@ class Program {
   final int maxAmount;
   final bool allowQuantity;
   final int maxQuantity;
+
+  /// بلا مبالغ جاهزة: يكتب المتبرع المبلغ مباشرةً (للنوع open فقط).
+  final bool freeEntry;
 
   static Program? fromJson(Object? j) {
     if (j is! Map) return null;
@@ -130,6 +134,9 @@ class Program {
       maxAmount: _int(j['maxAmount'], 99999, min: 1),
       allowQuantity: j['allowQuantity'] == true,
       maxQuantity: _int(j['maxQuantity'], 99, min: 1, max: 999),
+      freeEntry:
+          ProgramKind.parse(j['kind']) == ProgramKind.open &&
+          j['freeEntry'] == true,
     );
   }
 }

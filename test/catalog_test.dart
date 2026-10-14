@@ -431,6 +431,34 @@ void main() {
       },
     );
 
+    testWidgets('freeEntry program shows only the keypad, no presets', (
+      t,
+    ) async {
+      await start(
+        t,
+        _data(
+          programs: [
+            _prog('z', extra: {'freeEntry': true}),
+          ],
+          home: [
+            {'type': 'program', 'id': 'z'},
+          ],
+        ),
+      );
+      await t.tap(find.byKey(const Key('program_z')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('amount_50')), findsNothing);
+      expect(find.byKey(const Key('amount_other')), findsNothing);
+      expect(find.byKey(const Key('key_5')), findsOneWidget);
+      await t.tap(find.byKey(const Key('key_7')));
+      await t.tap(find.byKey(const Key('key_5')));
+      await t.pumpAndSettle();
+      expect(find.text('75 ر.س'), findsWidgets);
+      await t.tap(find.byKey(const Key('continue_pay')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('pay_amount')), findsOneWidget);
+    });
+
     testWidgets('open program respects min/max in the keypad', (t) async {
       await start(
         t,

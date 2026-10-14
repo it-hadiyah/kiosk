@@ -23,7 +23,7 @@ class AmountScreen extends StatefulWidget {
 
 class _AmountScreenState extends State<AmountScreen> {
   int? _preset;
-  bool _custom = false;
+  late bool _custom = widget.state.program?.freeEntry ?? false;
   String _digits = '';
   int _qty = 1;
   bool _navigating = false;
@@ -286,67 +286,74 @@ class _AmountScreenState extends State<AmountScreen> {
           ),
         ),
       ),
-      SizedBox(height: context.d(26)),
-      FadeSlideIn(
-        delayMs: 140,
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final gap = context.d(20);
-            final w = (c.maxWidth - gap * 3) / 4;
-            return Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              children: [
-                for (final a in _presets)
-                  SizedBox(
-                    width: w,
-                    child: _AmountTile(
-                      key: Key('amount_$a'),
-                      value: a,
-                      currency: s.sar,
-                      selected: !_custom && _preset == a,
-                      onTap: () => _pickPreset(a),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-      ),
-      if (canCustom) ...[
-        SizedBox(height: context.d(20)),
+      if (_p.freeEntry)
+        Padding(
+          padding: EdgeInsets.only(top: context.d(26)),
+          child: NumPad(onDigit: _digit, onBackspace: _backspace),
+        )
+      else ...[
+        SizedBox(height: context.d(26)),
         FadeSlideIn(
-          delayMs: 200,
-          child: Pressable(
-            key: const Key('amount_other'),
-            onTap: _openCustom,
-            child: AnimatedContainer(
-              duration: context.ms(220),
-              height: context.d(96),
-              alignment: Alignment.center,
-              decoration: _tileDecoration(context, _custom),
-              child: Text(
-                s.otherAmount,
-                style: TextStyle(
-                  fontSize: context.d(34),
-                  fontWeight: FontWeight.w500,
-                  color: _custom ? HColors.teal : HColors.ink,
+          delayMs: 140,
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final gap = context.d(20);
+              final w = (c.maxWidth - gap * 3) / 4;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final a in _presets)
+                    SizedBox(
+                      width: w,
+                      child: _AmountTile(
+                        key: Key('amount_$a'),
+                        value: a,
+                        currency: s.sar,
+                        selected: !_custom && _preset == a,
+                        onTap: () => _pickPreset(a),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+        if (canCustom) ...[
+          SizedBox(height: context.d(20)),
+          FadeSlideIn(
+            delayMs: 200,
+            child: Pressable(
+              key: const Key('amount_other'),
+              onTap: _openCustom,
+              child: AnimatedContainer(
+                duration: context.ms(220),
+                height: context.d(96),
+                alignment: Alignment.center,
+                decoration: _tileDecoration(context, _custom),
+                child: Text(
+                  s.otherAmount,
+                  style: TextStyle(
+                    fontSize: context.d(34),
+                    fontWeight: FontWeight.w500,
+                    color: _custom ? HColors.teal : HColors.ink,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        AnimatedSize(
-          duration: context.ms(280),
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child: _custom
-              ? Padding(
-                  padding: EdgeInsets.only(top: context.d(16)),
-                  child: NumPad(onDigit: _digit, onBackspace: _backspace),
-                )
-              : const SizedBox(width: double.infinity),
-        ),
+          AnimatedSize(
+            duration: context.ms(280),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _custom
+                ? Padding(
+                    padding: EdgeInsets.only(top: context.d(16)),
+                    child: NumPad(onDigit: _digit, onBackspace: _backspace),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ],
       ],
     ];
   }
