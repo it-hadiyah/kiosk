@@ -4,10 +4,10 @@ import '../data/models.dart';
 import '../l10n/strings.dart';
 import '../state/donation_state.dart';
 import '../theme/theme.dart';
+import '../widgets/amount_popup.dart';
 import '../widgets/common.dart';
 import '../widgets/featured_carousel.dart';
 import '../widgets/tile_grid.dart';
-import 'amount_screen.dart';
 import 'catalog_screen.dart';
 
 /// الخطوة 1 — اختيار البرنامج (أو الكتالوج). المحتوى والأحجام من لوحة التحكم.
@@ -30,8 +30,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       await Navigator.of(context)
           .push(kioskRoute(CatalogScreen(state: st, catalogId: t.catalog!.id)));
     } else {
-      st.program = t.program;
-      await Navigator.of(context).push(kioskRoute(AmountScreen(state: st)));
+      await openProgram(context, st, t.program!);
     }
     _navigating = false;
   }

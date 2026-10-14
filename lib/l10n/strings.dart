@@ -61,6 +61,7 @@ class S {
     'Choose your donation amount',
     'اپنے عطیے کی رقم منتخب کریں',
   );
+  String get donate => _t('تبرع', 'Donner', 'Donate', 'عطیہ دیں');
   String get otherAmount =>
       _t('مبلغ آخر', 'Autre montant', 'Other amount', 'دوسری رقم');
   String get quantity => _t('الكمية', 'Quantité', 'Quantity', 'تعداد');

@@ -431,7 +431,7 @@ void main() {
       },
     );
 
-    testWidgets('freeEntry program shows only the keypad, no presets', (
+    testWidgets('free program opens a popup with keypad then goes to payment', (
       t,
     ) async {
       await start(
@@ -447,16 +447,42 @@ void main() {
       );
       await t.tap(find.byKey(const Key('program_z')));
       await t.pumpAndSettle();
+      expect(find.byKey(const Key('amount_popup')), findsOneWidget);
       expect(find.byKey(const Key('amount_50')), findsNothing);
       expect(find.byKey(const Key('amount_other')), findsNothing);
-      expect(find.byKey(const Key('key_5')), findsOneWidget);
+      // بلا مبلغ لا يعمل زر التبرع
+      await t.tap(find.byKey(const Key('popup_donate')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('amount_popup')), findsOneWidget);
       await t.tap(find.byKey(const Key('key_7')));
       await t.tap(find.byKey(const Key('key_5')));
       await t.pumpAndSettle();
       expect(find.text('75 ر.س'), findsWidgets);
-      await t.tap(find.byKey(const Key('continue_pay')));
+      await t.tap(find.byKey(const Key('popup_donate')));
       await t.pumpAndSettle();
+      expect(find.byKey(const Key('amount_popup')), findsNothing);
       expect(find.byKey(const Key('pay_amount')), findsOneWidget);
+      expect(find.text('75 ر.س'), findsWidgets);
+    });
+
+    testWidgets('free popup can be closed without donating', (t) async {
+      await start(
+        t,
+        _data(
+          programs: [
+            _prog('z', extra: {'kind': 'free'}),
+          ],
+          home: [
+            {'type': 'program', 'id': 'z'},
+          ],
+        ),
+      );
+      await t.tap(find.byKey(const Key('program_z')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('popup_close')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('amount_popup')), findsNothing);
+      expect(find.byKey(const Key('program_z')), findsOneWidget);
     });
 
     testWidgets('open program respects min/max in the keypad', (t) async {

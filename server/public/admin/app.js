@@ -779,7 +779,7 @@ function placementsHtml() {
 
 function programEditorHtml() {
   const p = ui.edit.obj || findProg(ui.edit.id); const e = ui.edit;
-  const kinds = [['open', 'يختار المتبرع المبلغ (مبالغ سريعة + مبلغ آخر) — مثل الصدقة'], ['presets', 'مبالغ محددة فقط'], ['fixed', 'قيمة ثابتة لا يغيّرها المتبرع'], ['free', 'بلا مبالغ جاهزة — يكتب المتبرع المبلغ مباشرةً (مثل الزكاة)']];
+  const kinds = [['open', 'يختار المتبرع المبلغ (مبالغ سريعة + مبلغ آخر) — مثل الصدقة'], ['presets', 'مبالغ محددة فقط'], ['fixed', 'قيمة ثابتة لا يغيّرها المتبرع'], ['free', 'نافذة منبثقة يكتب فيها المتبرع المبلغ ثم يتبرع (مثل الزكاة والصدقة)']];
   let cond = '';
   if (p.kind === 'fixed') {
     cond = `${numField('prog', 'price', 'القيمة (1 أو أكثر)', p.price, { min: 1, blank0: true, ph: 'مثال: 15' })}

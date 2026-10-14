@@ -5,9 +5,9 @@ import '../data/models.dart';
 import '../l10n/strings.dart';
 import '../state/donation_state.dart';
 import '../theme/theme.dart';
+import '../widgets/amount_popup.dart';
 import '../widgets/common.dart';
 import '../widgets/tile_grid.dart';
-import 'amount_screen.dart';
 
 /// صفحة كتالوج: لافتة بعنوانه ثم برامجه بأحجامها.
 class CatalogScreen extends StatefulWidget {
@@ -29,9 +29,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   Future<void> _open(Tile t) async {
     if (_navigating || t.program == null) return;
     _navigating = true;
-    widget.state.program = t.program;
-    await Navigator.of(context)
-        .push(kioskRoute(AmountScreen(state: widget.state)));
+    await openProgram(context, widget.state, t.program!);
     _navigating = false;
   }
 
