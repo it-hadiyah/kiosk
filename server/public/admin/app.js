@@ -748,7 +748,7 @@ function openEditor(type, id) {
   $('#scrim').hidden = false; $('#drawer').hidden = false;
   ['#main', '#nav', '.topbar'].forEach((s) => $(s).setAttribute('inert', ''));
   requestAnimationFrame(() => { $('#drawer').classList.add('open'); $('#scrim').classList.add('open'); });
-  setTimeout(() => { const f = $('#drawerBody input[type=text]'); if (f) f.focus(); }, 60);
+  setTimeout(() => { if ($('#drawer').contains(document.activeElement)) return; const f = $('#drawerBody [data-f="title.ar"]'); if (f) f.focus(); }, 60);
 }
 async function closeEditor(force) {
   const e = ui.edit; if (!e) return;
@@ -843,9 +843,9 @@ const actions = {
   },
   'home-add'() {
     const v = $('#homeAdd').value; if (!v || !v.includes(':')) return; const [t, id] = v.split(':');
-    C().home.push({ type: t, id, size: 'medium' }); markDirty(); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; toast('أُضيف إلى الرئيسية');
+    C().home.push({ type: t, id, size: 'medium' }); markDirty(); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false;
   },
-  'home-add-prog'(el) { C().home.push({ type: 'program', id: el.dataset.id, size: 'medium' }); markDirty(); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; toast('أُضيف إلى الرئيسية'); },
+  'home-add-prog'(el) { C().home.push({ type: 'program', id: el.dataset.id, size: 'medium' }); markDirty(); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; },
   'item-add'() {
     const id = $('#itemAdd').value; const c = editing(); if (!id || !c) return;
     c.items.push({ programId: id, size: 'medium' }); afterListChange();
@@ -873,12 +873,12 @@ const actions = {
     const [ctx, f] = el.dataset.path.split(':'); const o = ctxObj(ctx); o[f].splice(+el.dataset.i, 1); chipsChanged(el.dataset.path, ctx);
   },
   async create() {
-    const e = ui.edit; e.showErr = true; const errs = validateEditorUI();
-    if (!e.obj.id) { e.obj.id = uniqueId(rnd(e.type === 'prog' ? 'p' : 'c'), e.type === 'prog' ? C().programs : C().catalogs); }
+    const e = ui.edit; e.showErr = true;
+    if (!e.obj.id) { e.obj.id = uniqueId(rnd(e.type === 'prog' ? 'p' : 'c'), e.type === 'prog' ? C().programs : C().catalogs); const ie = $('#drawerBody [data-f="id"]'); if (ie) ie.value = e.obj.id; }
     const errs2 = validateEditorUI(); if (Object.keys(errs2).length) { const f = $('#drawerBody [aria-invalid]'); if (f) f.focus(); return; }
     const o = e.obj; (e.type === 'prog' ? C().programs : C().catalogs).push(o);
     e.creating = false; e.id = o.id; e.obj = null;
-    Object.entries(e.pl).forEach(([k, s]) => { const sv = e.creating; plSet(k, s); });
+    Object.entries(e.pl).forEach(([k, s]) => plSet(k, s));
     markDirty(); toast(e.type === 'prog' ? 'تم إنشاء البرنامج ✓' : 'تم إنشاء الكتالوج ✓');
     renderDrawer(false); refreshRegions();
   },
