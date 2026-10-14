@@ -216,7 +216,7 @@ class _PaymentScreenState extends State<PaymentScreen>
         SizedBox(
           width: context.d(380),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(context.d(10)),
+            borderRadius: BorderRadius.circular(context.r(10)),
             child: LinearProgressIndicator(
               minHeight: context.d(10),
               backgroundColor: HColors.tealLight,
@@ -277,7 +277,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             ),
             decoration: BoxDecoration(
               color: HColors.tealLight,
-              borderRadius: BorderRadius.circular(context.d(24)),
+              borderRadius: BorderRadius.circular(context.r(24)),
             ),
             child: Text(
               s.done,

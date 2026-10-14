@@ -398,6 +398,24 @@ async function main() {
     ok(await page.$$eval('#view input', (a) => a.length > 0 && a.every((i) => i.disabled)), 'editor: general settings locked');
     ok(await page.isHidden('#btnPublish'), 'editor: publish hidden');
 
+    /* ---------- الهوية البصرية ---------- */
+    console.log('== theme manager');
+    await page.click('[data-act=logout]'); await page.waitForSelector('#loginPw');
+    await page.fill('#loginPw', PASS); await page.click('#loginBtn');
+    await page.waitForFunction(() => document.body.dataset.role === 'super');
+    await tab('settings');
+    await page.waitForSelector('#thPrimary');
+    await page.$eval('#thPrimary', (el) => { el.value = '#C0392B'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    await page.click('[data-act=theme-radius][data-v=round]');
+    await saved();
+    eq(await page.evaluate(() => C().settings.theme), { primary: '#C0392B', ink: '#1F4A47', radius: 'round' }, 'theme edited in draft');
+    await page.locator('[data-region=themeCard]').screenshot({ path: path.join(SHOTS, '10-theme.png') });
+    await page.$eval('#thPrimary', (el) => { el.value = '#FFEEAA'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    await page.waitForFunction(() => document.querySelector('#themeInfo .badc'));
+    ok((await page.textContent('#themeInfo')).includes('لن تُحفظ'), 'low-contrast primary is flagged and blocked');
+    await page.click('[data-act=theme-reset]'); await saved();
+    eq(await page.evaluate(() => C().settings.theme), { primary: '#00A092', ink: '#1F4A47', radius: 'normal' }, 'theme reset to defaults');
+
     ok(jsErrors.length === 0, 'no JS console/page errors' + (jsErrors.length ? ': ' + jsErrors.join(' | ') : ''));
   } catch (e) {
     fail++; console.log('  ✗ EXCEPTION:', e.stack || e);

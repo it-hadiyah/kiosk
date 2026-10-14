@@ -27,6 +27,16 @@ function image(v) {
   return '';
 }
 
+const HEX = /^#[0-9a-fA-F]{6}$/;
+function lum(hex) {
+  const ch = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+/** نسبة التباين WCAG بين لونين سداسيين. */
+function contrast(a, b) { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+const THEME_DEFAULT = { primary: '#00A092', ink: '#1F4A47', radius: 'normal' };
+const RADII = ['sharp', 'normal', 'round'];
+
 function normalize(input) {
   const errors = [];
   const warnings = [];
@@ -41,7 +51,16 @@ function normalize(input) {
     welcomeBackground: image(st.welcomeBackground),
     homeTitle: loc(st.homeTitle),
     homeSubtitle: loc(st.homeSubtitle),
+    theme: { ...THEME_DEFAULT },
   };
+  const th = isObj(st.theme) ? st.theme : {};
+  if (typeof th.primary === 'string' && HEX.test(th.primary)) settings.theme.primary = th.primary.toUpperCase();
+  else if (th.primary) warnings.push('اللون الأساسي غير صالح — استُخدم الافتراضي');
+  if (typeof th.ink === 'string' && HEX.test(th.ink)) settings.theme.ink = th.ink.toUpperCase();
+  else if (th.ink) warnings.push('لون النصوص غير صالح — استُخدم الافتراضي');
+  if (RADII.includes(th.radius)) settings.theme.radius = th.radius;
+  if (contrast(settings.theme.primary, '#FFFFFF') < 3) errors.push(`الهوية البصرية: اللون الأساسي فاتح جداً — النص الأبيض فوق الأزرار لن يُقرأ (التباين ${contrast(settings.theme.primary, '#FFFFFF').toFixed(1)}، المطلوب 3 على الأقل)`);
+  if (contrast(settings.theme.ink, '#F4F6F6') < 4.5) errors.push(`الهوية البصرية: لون النصوص باهت — لن تُقرأ العناوين (التباين ${contrast(settings.theme.ink, '#F4F6F6').toFixed(1)}، المطلوب 4.5 على الأقل)`);
   const qa = Array.isArray(st.quickAmounts) ? st.quickAmounts : [];
   settings.quickAmounts = [...new Set(qa.map((n) => int(n, 1, settings.maxAmount, 0)).filter((n) => n > 0))].slice(0, 8);
   if (!settings.quickAmounts.length) {
@@ -157,4 +176,4 @@ function normalize(input) {
   };
 }
 
-module.exports = { normalize, LANGS, SIZES, KINDS };
+module.exports = { normalize, LANGS, SIZES, KINDS, contrast };

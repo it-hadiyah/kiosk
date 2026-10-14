@@ -76,7 +76,7 @@ class _TileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = tile.size;
     final small = size == TileSize.small;
-    final r = BorderRadius.circular(context.d(small ? 28 : 34));
+    final r = BorderRadius.circular(context.r(small ? 28 : 34));
     final height = context.d(size == TileSize.large ? 330 : 360);
     final title = tile.title(lang);
     final titleSize = switch (size) {
@@ -99,7 +99,7 @@ class _TileCard extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: .5),
-                borderRadius: BorderRadius.circular(context.d(20)),
+                borderRadius: BorderRadius.circular(context.r(20)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

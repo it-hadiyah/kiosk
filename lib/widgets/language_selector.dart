@@ -54,7 +54,7 @@ class LanguageSelector extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(context.d(compact ? 20 : 30)),
+          borderRadius: BorderRadius.circular(context.r(compact ? 20 : 30)),
           border: Border.all(
             color: selected
                 ? Colors.white

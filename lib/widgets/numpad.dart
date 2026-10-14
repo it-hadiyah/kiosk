@@ -32,7 +32,7 @@ class NumPad extends StatelessWidget {
             border: Border.all(
               color: glass ? const Color(0x99FFFFFF) : HColors.border,
             ),
-            borderRadius: BorderRadius.circular(context.d(24)),
+            borderRadius: BorderRadius.circular(context.r(24)),
           ),
           child: child,
         ),

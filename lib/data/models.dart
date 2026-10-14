@@ -209,6 +209,9 @@ class AppSettings {
     this.welcomeBackground = '',
     this.homeTitle = Localized.empty,
     this.homeSubtitle = Localized.empty,
+    this.themePrimary,
+    this.themeInk,
+    this.themeRadius = 1,
   });
   final int idleSeconds;
   final int warnSeconds;
@@ -217,6 +220,16 @@ class AppSettings {
   final String welcomeBackground;
   final Localized homeTitle;
   final Localized homeSubtitle;
+
+  /// الهوية البصرية من اللوحة (null = الافتراضي).
+  final Color? themePrimary;
+  final Color? themeInk;
+  final double themeRadius;
+
+  static Color? _hex(Object? v) {
+    if (v is! String || !RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v)) return null;
+    return Color(0xFF000000 | int.parse(v.substring(1), radix: 16));
+  }
 
   static AppSettings fromJson(Object? j) {
     if (j is! Map) return const AppSettings();
@@ -237,6 +250,17 @@ class AppSettings {
           : '',
       homeTitle: Localized.from(j['homeTitle']),
       homeSubtitle: Localized.from(j['homeSubtitle']),
+      themePrimary: j['theme'] is Map
+          ? _hex((j['theme'] as Map)['primary'])
+          : null,
+      themeInk: j['theme'] is Map ? _hex((j['theme'] as Map)['ink']) : null,
+      themeRadius: j['theme'] is Map
+          ? switch ((j['theme'] as Map)['radius']) {
+              'sharp' => .35,
+              'round' => 1.45,
+              _ => 1.0,
+            }
+          : 1.0,
     );
   }
 }

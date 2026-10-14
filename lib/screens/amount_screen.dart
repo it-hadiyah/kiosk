@@ -200,7 +200,7 @@ class _AmountScreenState extends State<AmountScreen> {
           padding: EdgeInsets.symmetric(vertical: context.d(40)),
           decoration: BoxDecoration(
             color: HColors.tealLight,
-            borderRadius: BorderRadius.circular(context.d(32)),
+            borderRadius: BorderRadius.circular(context.r(32)),
             border: Border.all(color: HColors.teal, width: context.d(3)),
           ),
           child: Column(
@@ -363,7 +363,7 @@ class _AmountScreenState extends State<AmountScreen> {
 BoxDecoration _tileDecoration(BuildContext context, bool selected) =>
     BoxDecoration(
       color: selected ? HColors.tealLight : Colors.white,
-      borderRadius: BorderRadius.circular(context.d(26)),
+      borderRadius: BorderRadius.circular(context.r(26)),
       border: Border.all(
         color: selected ? HColors.teal : HColors.border,
         width: selected ? context.d(3) : context.d(1.5),
@@ -436,7 +436,7 @@ class _StepButton extends StatelessWidget {
         height: context.d(120),
         decoration: BoxDecoration(
           color: on ? HColors.teal : const Color(0xFFD5DDDC),
-          borderRadius: BorderRadius.circular(context.d(32)),
+          borderRadius: BorderRadius.circular(context.r(32)),
         ),
         child: Icon(icon, size: context.d(60), color: Colors.white),
       ),
@@ -460,7 +460,7 @@ class _ProgramHeader extends StatelessWidget {
       padding: EdgeInsets.all(context.d(22)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(context.d(32)),
+        borderRadius: BorderRadius.circular(context.r(32)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: .06),
@@ -472,7 +472,7 @@ class _ProgramHeader extends StatelessWidget {
       child: Row(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(context.d(24)),
+            borderRadius: BorderRadius.circular(context.r(24)),
             child: SizedBox(
               width: context.d(220),
               height: context.d(220),

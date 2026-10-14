@@ -323,7 +323,7 @@ async function handle(req, res) {
       const { catalog, errors, warnings } = normalize(body.catalog ?? body);
       if (errors.length) return send(res, 422, { error: 'بيانات غير صالحة', errors, warnings });
       const prevDraft = readJson(DRAFT);
-      if (!can(who, 'settings') && JSON.stringify(prevDraft.settings) !== JSON.stringify(catalog.settings)) return send(res, 403, { error: 'تعديل الإعدادات العامة يتطلب صلاحية «مدير المحتوى»' });
+      if (!can(who, 'settings') && JSON.stringify(normalize(prevDraft).catalog.settings) !== JSON.stringify(catalog.settings)) return send(res, 403, { error: 'تعديل الإعدادات العامة يتطلب صلاحية «مدير المحتوى»' });
       const changes = diffSummary(prevDraft, catalog);
       if (changes.length) audit(who, 'draft_save', changes.slice(0, 6).join('، ') + (changes.length > 6 ? ` (+${changes.length - 6})` : ''), { ip: ip(req) });
       writeJsonAtomic(DRAFT, catalog);

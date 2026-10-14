@@ -158,7 +158,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: HColors.teal,
-                            borderRadius: BorderRadius.circular(context.d(44)),
+                            borderRadius: BorderRadius.circular(context.r(44)),
                             boxShadow: [
                               BoxShadow(
                                 color: HColors.teal.withValues(alpha: .45),

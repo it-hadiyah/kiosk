@@ -104,7 +104,7 @@ class _Banner extends StatelessWidget {
   Widget build(BuildContext context) {
     final sub = catalog.subtitle.of(lang);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(context.d(36)),
+      borderRadius: BorderRadius.circular(context.r(36)),
       child: SizedBox(
         height: context.d(300),
         width: double.infinity,

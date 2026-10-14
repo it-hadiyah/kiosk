@@ -79,7 +79,7 @@ class _AmountPopupState extends State<AmountPopup> {
         vertical: context.d(40),
       ),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(context.d(48)),
+        borderRadius: BorderRadius.circular(context.r(48)),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: context.d(900)),
@@ -117,7 +117,7 @@ class _AmountPopupState extends State<AmountPopup> {
                     padding: EdgeInsets.symmetric(horizontal: context.d(32)),
                     decoration: BoxDecoration(
                       color: hasBg ? const Color(0x33FFFFFF) : Colors.white,
-                      borderRadius: BorderRadius.circular(context.d(28)),
+                      borderRadius: BorderRadius.circular(context.r(28)),
                       border: Border.all(
                         color: hasBg
                             ? (_amount == 0

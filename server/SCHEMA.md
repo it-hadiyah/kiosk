@@ -48,3 +48,12 @@
 | GET | `/uploads/<file>` | الصور |
 
 الإدارة تتطلب `Authorization: Bearer <token>`.
+
+## الهوية البصرية `settings.theme`
+`{ primary: "#RRGGBB", ink: "#RRGGBB", radius: "sharp"|"normal"|"round" }` — الافتراضي `#00A092` / `#1F4A47` / `normal`.
+يرفض الخادم اللون الأساسي إن قلّ تباينه مع الأبيض عن 3، ولون النصوص إن قلّ تباينه مع `#F4F6F6` عن 4.5. القيم غير الصالحة تُستبدل بالافتراضي مع تحذير.
+
+## أحداث الكيوسك (تجريبية) `POST /api/events`
+`{ type, programId?, amount?, durationMs?, lang?, deviceId, appVersion }` حيث `type` ∈
+`session_start | program_selected | amount_chosen | payment_started | payment_completed | session_abandoned | heartbeat`.
+بلا بيانات شخصية. ويُسجَّل الجهاز أيضاً من ترويستي `X-Kiosk-Device` و`X-Kiosk-Version` عند جلب الكتالوج.

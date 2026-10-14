@@ -9,6 +9,7 @@ import 'package:hadiyah_kiosk/data/analytics.dart';
 import 'package:hadiyah_kiosk/data/catalog_service.dart';
 import 'package:hadiyah_kiosk/data/models.dart';
 import 'package:hadiyah_kiosk/l10n/strings.dart';
+import 'package:hadiyah_kiosk/theme/theme.dart';
 
 Map<String, dynamic> _prog(
   String id, {
@@ -523,6 +524,47 @@ void main() {
       await t.pumpAndSettle();
       expect(find.byKey(const Key('pay_amount')), findsOneWidget);
     });
+
+    test(
+      'theme: parsed, applied by the service on refresh, bad values ignored',
+      () async {
+        addTearDown(HColors.apply);
+        final body = jsonEncode({
+          'settings': {
+            'theme': {
+              'primary': '#C0392B',
+              'ink': '#222222',
+              'radius': 'sharp',
+            },
+          },
+          'programs': [],
+          'catalogs': [],
+          'home': [],
+        });
+        final svc = CatalogService(
+          baseUrl: 'http://x',
+          cacheDir: Directory.systemTemp.createTempSync('hd_theme_'),
+          refreshEvery: Duration.zero,
+          fetcher: (u, {etag}) async => FetchResult(200, body: body, etag: 'e'),
+        );
+        await svc.refresh();
+        expect(svc.data.settings.themePrimary, const Color(0xFFC0392B));
+        expect(HColors.teal, const Color(0xFFC0392B));
+        expect(HColors.ink, const Color(0xFF222222));
+        expect(HColors.radius, closeTo(.35, .001));
+        expect(
+          HColors.tealDark.computeLuminance(),
+          lessThan(HColors.teal.computeLuminance()),
+        );
+        final bad = CatalogData.fromJson({
+          'settings': {
+            'theme': {'primary': 'red', 'radius': 'x'},
+          },
+        });
+        expect(bad.settings.themePrimary, isNull);
+        expect(bad.settings.themeRadius, 1.0);
+      },
+    );
 
     testWidgets('free popup can be closed without donating', (t) async {
       await start(

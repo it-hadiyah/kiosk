@@ -256,3 +256,38 @@ document.addEventListener('click', (ev) => {
   const [type, id] = t.dataset.tile.split(':');
   ev.preventDefault(); openEditor(type === 'catalog' ? 'cat' : 'prog', id);
 });
+
+/* ---------- الهوية البصرية (ألوان + استدارة) داخل الإعدادات ---------- */
+const THEME_DEF = { primary: '#00A092', ink: '#1F4A47', radius: 'normal' };
+const RADIUS_LABEL = { sharp: 'حادة', normal: 'عادية', round: 'مستديرة' };
+const _viewSettings = viewSettings;
+VIEWS.settings = () => _viewSettings().replace(/<\/div>\s*$/, '<div data-region="themeCard"></div></div>');
+function themeInfoHtml() {
+  const t = C().settings.theme; const e = settingsErrors(C().settings);
+  const c1 = contrastHex(t.primary, '#FFFFFF'), c2 = contrastHex(t.ink, '#F4F6F6');
+  const line = (ok, txt) => `<li class="${ok ? 'okc' : 'badc'}">${ok ? '✓' : '✗'} ${esc(txt)}</li>`;
+  const r = { sharp: 6, normal: 18, round: 30 }[t.radius] || 18;
+  return `<div class="th-demo" style="--c:${esc(t.primary)};--i:${esc(t.ink)};--r:${r}px">
+      <div class="th-tile"><span>سقيا الماء</span></div><button type="button" class="th-btn" tabindex="-1">متابعة للدفع</button><span class="th-chip">50 ر.س</span></div>
+    <ul class="th-checks">${line(!e.themePrimary, `اللون الأساسي — التباين مع النص الأبيض ${c1.toFixed(1)} (الحد الأدنى 3)`)}${line(!e.themeInk, `لون النصوص — التباين مع الخلفية ${c2.toFixed(1)} (الحد الأدنى 4.5)`)}</ul>
+    ${e.themePrimary || e.themeInk ? '<p class="err">لن تُحفظ الهوية حتى تُصحَّح الألوان أعلاه.</p>' : ''}`;
+}
+regions.themeCard = () => {
+  const t = C().settings.theme;
+  const changed = JSON.stringify(t) !== JSON.stringify(THEME_DEF);
+  return `<section class="card"><div class="card-h"><h3>الهوية البصرية</h3>${changed ? '<button class="btn small" type="button" data-act="theme-reset">استعادة الافتراضي</button>' : ''}</div>
+    <p class="hint">لون العلامة ولون النصوص ودرجة استدارة الزوايا في تطبيق الكيوسك. الحدود تمنع ألواناً ضعيفة التباين. تظهر التغييرات في الكيوسك بعد «نشر التغييرات».</p>
+    <div class="grid2"><div class="field"><label for="thPrimary">اللون الأساسي (الأزرار والشارات)</label><div class="colorrow"><input id="thPrimary" type="color" data-ctx="set" data-f="theme.primary" value="${esc(t.primary)}"><code dir="ltr">${esc(t.primary)}</code></div></div>
+    <div class="field"><label for="thInk">لون النصوص والعناوين</label><div class="colorrow"><input id="thInk" type="color" data-ctx="set" data-f="theme.ink" value="${esc(t.ink)}"><code dir="ltr">${esc(t.ink)}</code></div></div></div>
+    <div class="field"><label>استدارة الزوايا</label><div class="seg" role="group" aria-label="استدارة الزوايا">${['sharp', 'normal', 'round'].map((k) => `<button type="button" data-act="theme-radius" data-v="${k}" aria-pressed="${t.radius === k}">${RADIUS_LABEL[k]}</button>`).join('')}</div></div>
+    <div id="themeInfo">${themeInfoHtml()}</div></section>`;
+};
+function themeChanged() {
+  markDirty(); const el = $('#themeInfo'); if (el) el.innerHTML = themeInfoHtml();
+  $$('[data-region="themeCard"] code').forEach((c, i) => { c.textContent = C().settings.theme[i ? 'ink' : 'primary']; });
+  refreshRegions();
+}
+Object.assign(actions, {
+  'theme-radius'(el) { C().settings.theme.radius = el.dataset.v; $$('[data-act="theme-radius"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === el.dataset.v))); themeChanged(); const r = $('[data-region="themeCard"]'); if (r) r.innerHTML = regions.themeCard(); },
+  'theme-reset'() { C().settings.theme = { ...THEME_DEF }; markDirty(); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; },
+});

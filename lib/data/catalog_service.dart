@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'analytics.dart';
+import '../theme/theme.dart';
 import 'models.dart';
 
 /// نتيجة طلب الكتالوج من الخادم.
@@ -71,6 +72,16 @@ class CatalogService extends ChangeNotifier {
 
   File get _catalogFile => File('${_cacheDir.path}/catalog.json');
 
+  /// يطبّق الهوية البصرية من إعدادات الكتالوج (ألوان + استدارة).
+  void _applyTheme() {
+    final st = data.settings;
+    HColors.apply(
+      primary: st.themePrimary ?? HColors.defaultPrimary,
+      inkColor: st.themeInk ?? HColors.defaultInk,
+      radiusK: st.themeRadius,
+    );
+  }
+
   /// يحمّل النسخة المحفوظة ثم يزامن مع الخادم ويبدأ التحديث الدوري.
   Future<void> init() async {
     await _loadCached();
@@ -88,6 +99,7 @@ class CatalogService extends ChangeNotifier {
         data = CatalogData.fromJson(
           jsonDecode(await _catalogFile.readAsString()),
         );
+        _applyTheme();
         notifyListeners();
       }
     } catch (e) {
@@ -110,6 +122,7 @@ class CatalogService extends ChangeNotifier {
           jsonDecode(r.body!),
         ); // يرمي إن كان غير صالح فنُبقي القديم
         data = parsed;
+        _applyTheme();
         etag = r.etag;
         lastError = null;
         unawaited(_persist(r.body!));

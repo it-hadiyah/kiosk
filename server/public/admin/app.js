@@ -151,6 +151,7 @@ function setPath(o, path, v) { const ks = path.split('.'); const last = ks.pop()
 /* الكيان الذي يعدّله المحرّر / الإعدادات حسب السياق */
 /* يضمن وجود featured بقيم افتراضية (متوافق مع خوادم/بيانات تجريبية بلا هذا الحقل) */
 function normClient(c) {
+  const S0 = c.settings || (c.settings = {}); S0.theme = Object.assign({ primary: '#00A092', ink: '#1F4A47', radius: 'normal' }, S0.theme);
   const f = (c.featured && typeof c.featured === 'object') ? c.featured : {};
   c.featured = { enabled: f.enabled === true, intervalSeconds: f.intervalSeconds === '' ? '' : (isNum(f.intervalSeconds) ? f.intervalSeconds : 5), title: Object.assign(blankLoc(), f.title), items: Array.isArray(f.items) ? f.items : [] };
   (c.programs || []).forEach((p) => { p.popupTitle = Object.assign(blankLoc(), p.popupTitle); p.popupHint = Object.assign(blankLoc(), p.popupHint); if (p.kind === 'open' && p.freeEntry) p.kind = 'free'; delete p.freeEntry; });
@@ -192,10 +193,18 @@ function catErrors(c, otherIds) {
   if (!String(c.title.ar || '').trim()) e['title.ar'] = 'العنوان العربي مطلوب';
   return e;
 }
+function contrastHex(a, b) {
+  const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  if (!/^#[0-9a-fA-F]{6}$/.test(a || '') || !/^#[0-9a-fA-F]{6}$/.test(b || '')) return 21;
+  const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
 function settingsErrors(s) {
   const e = {};
   const rng = (k, a, b, label) => { const v = s[k]; if (!(isNum(v) && v >= a && v <= b)) e[k] = `${label}: قيمة بين ${nf(a)} و ${nf(b)}`; };
   rng('idleSeconds', 10, 600, 'مهلة الخمول'); rng('warnSeconds', 5, 120, 'مهلة التنبيه'); rng('maxAmount', 1, 9999999, 'أقصى مبلغ');
+  { const th = s.theme || {}; const c1 = contrastHex(th.primary, '#FFFFFF'), c2 = contrastHex(th.ink, '#F4F6F6');
+    if (c1 < 3) e.themePrimary = `اللون الأساسي فاتح جداً (التباين ${c1.toFixed(1)} — المطلوب 3 على الأقل)`;
+    if (c2 < 4.5) e.themeInk = `لون النصوص باهت (التباين ${c2.toFixed(1)} — المطلوب 4.5 على الأقل)`; }
   if (!s.quickAmounts.length) e.quickAmounts = 'أضف مبلغاً سريعاً واحداً على الأقل (حتى 8)';
   else if (isNum(s.maxAmount) && s.quickAmounts.some((n) => n > s.maxAmount)) e.quickAmounts = 'بعض المبالغ السريعة أكبر من أقصى مبلغ';
   return e;
@@ -378,7 +387,8 @@ function deviceSwitch() {
 }
 function phone(inner, lang) {
   const L = LANGS.find((l) => l.k === lang);
-  return `<div class="phone dev-${ui.pvDev || 'mobile'}" dir="${L.dir}" lang="${lang}"><div class="pv-screen">${inner}</div></div>`;
+  const th = C().settings.theme || {};
+  return `<div class="phone dev-${ui.pvDev || 'mobile'}" style="--pv-brand:${esc(th.primary || '#00786d')};--pv-ink:${esc(th.ink || '#1F4A47')};--pv-r:${{ sharp: .35, round: 1.45 }[th.radius] || 1}" dir="${L.dir}" lang="${lang}"><div class="pv-screen">${inner}</div></div>`;
 }
 const FEAT_DEF = { ar: ['الأكثر رواجاً', 'تبرع الآن'], fr: ['Les plus populaires', 'Donner'], en: ['Most popular', 'Donate now'], ur: ['سب سے مقبول', 'عطیہ کریں'] };
 function featItems() {
@@ -735,7 +745,7 @@ function diffCatalogs(a, b) {
   if (!same(fa.items.map(fk).filter((k) => fbs.has(k)), fb.items.map(fk).filter((k) => fas.has(k)))) fg.items.push({ k: 'chg', t: 'تغيير ترتيب عناصر الأكثر رواجاً' });
   /* الإعدادات */
   const sg = { title: 'الإعدادات', items: [] }; G.push(sg);
-  const SL = { idleSeconds: 'مهلة الخمول', warnSeconds: 'مهلة التنبيه', maxAmount: 'أقصى مبلغ', quickAmounts: 'المبالغ السريعة', welcomeBackground: 'صورة الترحيب', homeTitle: 'عنوان الصفحة', homeSubtitle: 'العنوان الفرعي' };
+  const SL = { idleSeconds: 'مهلة الخمول', warnSeconds: 'مهلة التنبيه', maxAmount: 'أقصى مبلغ', quickAmounts: 'المبالغ السريعة', welcomeBackground: 'صورة الترحيب', homeTitle: 'عنوان الصفحة', homeSubtitle: 'العنوان الفرعي', theme: 'الهوية البصرية' };
   Object.keys(SL).forEach((k) => { if (!same(a.settings[k], b.settings[k])) sg.items.push({ k: 'chg', t: `تغيير ${SL[k]}` }); });
   return G;
 }

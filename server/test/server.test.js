@@ -172,3 +172,18 @@ test('featured: normalized, bounded, references checked, survives publish', asyn
   const bare = normalize({ programs: [{ id: 'a', title: { ar: 'أ' } }] });
   assert.equal(bare.catalog.featured.enabled, false);
 });
+
+test('theme: valid colors kept, bad hex defaulted, low contrast rejected', () => {
+  const seed = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'seed', 'catalog.json'), 'utf8'));
+  const withTheme = (t) => normalize({ ...seed, settings: { ...seed.settings, theme: t } });
+  const ok = withTheme({ primary: '#c0392b', ink: '#222222', radius: 'round' });
+  assert.deepEqual(ok.errors, []);
+  assert.deepEqual(ok.catalog.settings.theme, { primary: '#C0392B', ink: '#222222', radius: 'round' });
+  const bad = withTheme({ primary: 'red', ink: '#12', radius: 'x' });
+  assert.deepEqual(bad.catalog.settings.theme, { primary: '#00A092', ink: '#1F4A47', radius: 'normal' });
+  assert.ok(bad.warnings.length >= 2);
+  const pale = withTheme({ primary: '#FFEEAA' });
+  assert.ok(pale.errors.some((e) => e.includes('اللون الأساسي فاتح')));
+  const faint = withTheme({ ink: '#BBBBBB' });
+  assert.ok(faint.errors.some((e) => e.includes('لون النصوص باهت')));
+});

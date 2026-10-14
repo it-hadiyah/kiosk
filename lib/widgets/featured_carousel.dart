@@ -90,7 +90,7 @@ class _FeaturedCarouselState extends State<FeaturedCarousel> {
   @override
   Widget build(BuildContext context) {
     if (_n == 0) return const SizedBox.shrink();
-    final r = BorderRadius.circular(context.d(36));
+    final r = BorderRadius.circular(context.r(36));
     return Container(
       key: const Key('featured_carousel'),
       height: context.d(420),
@@ -152,7 +152,7 @@ class _FeaturedCarouselState extends State<FeaturedCarousel> {
                           color: Colors.white.withValues(
                             alpha: i == _index ? 1 : .55,
                           ),
-                          borderRadius: BorderRadius.circular(context.d(10)),
+                          borderRadius: BorderRadius.circular(context.r(10)),
                         ),
                       ),
                   ],
@@ -215,7 +215,7 @@ class _Slide extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: const Color(0xFFFFB020),
-                borderRadius: BorderRadius.circular(context.d(30)),
+                borderRadius: BorderRadius.circular(context.r(30)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -272,7 +272,7 @@ class _Slide extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: HColors.teal,
-                      borderRadius: BorderRadius.circular(context.d(26)),
+                      borderRadius: BorderRadius.circular(context.r(26)),
                     ),
                     child: Text(
                       s.donateNow,

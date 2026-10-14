@@ -139,7 +139,7 @@ class HeaderBar extends StatelessWidget {
                       ),
                 decoration: BoxDecoration(
                   color: HColors.tealLight,
-                  borderRadius: BorderRadius.circular(context.d(20)),
+                  borderRadius: BorderRadius.circular(context.r(20)),
                 ),
                 child: iconBack
                     ? Icon(
@@ -185,7 +185,7 @@ class PrimaryButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: on ? HColors.teal : const Color(0xFFD5DDDC),
-          borderRadius: BorderRadius.circular(context.d(32)),
+          borderRadius: BorderRadius.circular(context.r(32)),
           boxShadow: on
               ? [
                   BoxShadow(
@@ -224,7 +224,7 @@ class DemoBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF4D6),
-        borderRadius: BorderRadius.circular(context.d(40)),
+        borderRadius: BorderRadius.circular(context.r(40)),
         border: Border.all(color: const Color(0xFFF1D88A)),
       ),
       child: Row(
