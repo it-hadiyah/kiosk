@@ -96,6 +96,8 @@ class Program {
     this.maxAmount = 99999,
     this.allowQuantity = false,
     this.maxQuantity = 99,
+    this.popupTitle = Localized.empty,
+    this.popupHint = Localized.empty,
     this.active = true,
   });
 
@@ -111,6 +113,10 @@ class Program {
   final int maxAmount;
   final bool allowQuantity;
   final int maxQuantity;
+
+  /// نافذة المبلغ (للنوع free): العبارة العلوية ونص الحقل.
+  final Localized popupTitle;
+  final Localized popupHint;
 
   bool get freeEntry => kind == ProgramKind.free;
 
@@ -137,6 +143,8 @@ class Program {
       maxAmount: _int(j['maxAmount'], 99999, min: 1),
       allowQuantity: j['allowQuantity'] == true,
       maxQuantity: _int(j['maxQuantity'], 99, min: 1, max: 999),
+      popupTitle: Localized.from(j['popupTitle']),
+      popupHint: Localized.from(j['popupHint']),
     );
   }
 }

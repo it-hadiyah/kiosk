@@ -141,7 +141,19 @@ const kDefaultCatalogJson = r'''{
       "minAmount": 1,
       "maxAmount": 99999,
       "allowQuantity": false,
-      "maxQuantity": 99
+      "maxQuantity": 99,
+      "popupTitle": {
+        "ar": "أخرج زكاة مالك",
+        "fr": "Versez votre zakat",
+        "en": "Give your zakat",
+        "ur": "اپنی زکوٰۃ ادا کریں"
+      },
+      "popupHint": {
+        "ar": "مبلغ الزكاة",
+        "fr": "Montant de la zakat",
+        "en": "Zakat amount",
+        "ur": "زکوٰۃ کی رقم"
+      }
     },
     {
       "id": "sadaqah",
@@ -160,7 +172,19 @@ const kDefaultCatalogJson = r'''{
       "minAmount": 1,
       "maxAmount": 99999,
       "allowQuantity": false,
-      "maxQuantity": 99
+      "maxQuantity": 99,
+      "popupTitle": {
+        "ar": "تصدّق بما تجود به نفسك",
+        "fr": "Donnez selon votre générosité",
+        "en": "Give what your heart allows",
+        "ur": "جتنا دل چاہے صدقہ کریں"
+      },
+      "popupHint": {
+        "ar": "مبلغ الصدقة",
+        "fr": "Montant de la sadaqa",
+        "en": "Sadaqah amount",
+        "ur": "صدقے کی رقم"
+      }
     }
   ],
   "catalogs": [

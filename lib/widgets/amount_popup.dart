@@ -64,86 +64,83 @@ class _AmountPopupState extends State<AmountPopup> {
   Widget build(BuildContext context) {
     final lang = widget.state.lang;
     final s = S(lang);
+    final title = widget.program.popupTitle.of(lang);
+    final hint = widget.program.popupHint.of(lang);
     return Dialog(
       key: const Key('amount_popup'),
-      backgroundColor: HColors.bg,
+      backgroundColor: Colors.white,
       insetPadding: EdgeInsets.symmetric(
-        horizontal: context.d(60),
+        horizontal: context.d(70),
         vertical: context.d(40),
       ),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(context.d(40)),
+        borderRadius: BorderRadius.circular(context.d(48)),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: context.d(900)),
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(context.d(40)),
+          padding: EdgeInsets.all(context.d(44)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.program.title.of(lang),
-                      style: TextStyle(
-                        fontSize: context.d(44),
-                        fontWeight: FontWeight.w700,
-                        color: HColors.ink,
-                      ),
-                    ),
-                  ),
-                  Pressable(
-                    key: const Key('popup_close'),
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Container(
-                      width: context.d(80),
-                      height: context.d(80),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: HColors.border),
-                      ),
-                      child: Icon(
-                        Icons.close_rounded,
-                        size: context.d(44),
-                        color: HColors.ink,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: context.d(20)),
               Text(
-                s.chooseAmount,
-                style: TextStyle(fontSize: context.d(32), color: HColors.muted),
+                title.isNotEmpty ? title : widget.program.title.of(lang),
+                key: const Key('popup_title'),
+                style: TextStyle(
+                  fontSize: context.d(52),
+                  fontWeight: FontWeight.w700,
+                  color: HColors.tealDark,
+                ),
               ),
-              SizedBox(height: context.d(16)),
+              SizedBox(height: context.d(36)),
               Container(
                 width: double.infinity,
-                padding: EdgeInsets.symmetric(vertical: context.d(28)),
+                height: context.d(120),
+                padding: EdgeInsets.symmetric(horizontal: context.d(32)),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(context.d(28)),
-                  border: Border.all(color: HColors.teal, width: context.d(3)),
-                ),
-                child: Text(
-                  '$_amount ${s.sar}',
-                  key: const Key('popup_amount'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: context.d(84),
-                    fontWeight: FontWeight.w700,
-                    color: _amount == 0 ? HColors.muted : HColors.teal,
+                  border: Border.all(
+                    color: _amount == 0 ? HColors.border : HColors.teal,
+                    width: context.d(_amount == 0 ? 2 : 3),
                   ),
                 ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _amount == 0
+                            ? (hint.isNotEmpty ? hint : s.amountLabel)
+                            : '$_amount',
+                        key: const Key('popup_amount'),
+                        style: TextStyle(
+                          fontSize: context.d(_amount == 0 ? 40 : 60),
+                          fontWeight: _amount == 0
+                              ? FontWeight.w400
+                              : FontWeight.w700,
+                          color: _amount == 0
+                              ? const Color(0xFFB8C4C2)
+                              : HColors.teal,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      s.sar,
+                      style: TextStyle(
+                        fontSize: context.d(34),
+                        color: HColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              SizedBox(height: context.d(16)),
+              SizedBox(height: context.d(20)),
               NumPad(onDigit: _digit, onBackspace: _backspace),
-              SizedBox(height: context.d(24)),
+              SizedBox(height: context.d(20)),
               PrimaryButton(
                 key: const Key('popup_donate'),
-                label: s.donate,
+                label: s.continueToPay,
                 onPressed: _amount >= 1
                     ? () => Navigator.of(context).pop(_amount)
                     : null,

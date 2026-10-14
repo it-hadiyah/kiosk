@@ -438,7 +438,14 @@ void main() {
         t,
         _data(
           programs: [
-            _prog('z', extra: {'kind': 'free'}),
+            _prog(
+              'z',
+              extra: {
+                'kind': 'free',
+                'popupTitle': {'ar': 'عنوان النافذة'},
+                'popupHint': {'ar': 'نص الحقل'},
+              },
+            ),
           ],
           home: [
             {'type': 'program', 'id': 'z'},
@@ -448,6 +455,8 @@ void main() {
       await t.tap(find.byKey(const Key('program_z')));
       await t.pumpAndSettle();
       expect(find.byKey(const Key('amount_popup')), findsOneWidget);
+      expect(find.text('عنوان النافذة'), findsOneWidget);
+      expect(find.text('نص الحقل'), findsOneWidget);
       expect(find.byKey(const Key('amount_50')), findsNothing);
       expect(find.byKey(const Key('amount_other')), findsNothing);
       // بلا مبلغ لا يعمل زر التبرع
@@ -457,7 +466,7 @@ void main() {
       await t.tap(find.byKey(const Key('key_7')));
       await t.tap(find.byKey(const Key('key_5')));
       await t.pumpAndSettle();
-      expect(find.text('75 ر.س'), findsWidgets);
+      expect(find.text('75'), findsWidgets);
       await t.tap(find.byKey(const Key('popup_donate')));
       await t.pumpAndSettle();
       expect(find.byKey(const Key('amount_popup')), findsNothing);
@@ -470,7 +479,14 @@ void main() {
         t,
         _data(
           programs: [
-            _prog('z', extra: {'kind': 'free'}),
+            _prog(
+              'z',
+              extra: {
+                'kind': 'free',
+                'popupTitle': {'ar': 'عنوان النافذة'},
+                'popupHint': {'ar': 'نص الحقل'},
+              },
+            ),
           ],
           home: [
             {'type': 'program', 'id': 'z'},
@@ -479,7 +495,7 @@ void main() {
       );
       await t.tap(find.byKey(const Key('program_z')));
       await t.pumpAndSettle();
-      await t.tap(find.byKey(const Key('popup_close')));
+      await t.tapAt(const Offset(5, 5)); // خارج النافذة
       await t.pumpAndSettle();
       expect(find.byKey(const Key('amount_popup')), findsNothing);
       expect(find.byKey(const Key('program_z')), findsOneWidget);
