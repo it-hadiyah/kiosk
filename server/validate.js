@@ -74,6 +74,7 @@ function normalize(input) {
       maxAmount: kind === 'free' ? settings.maxAmount : int(p.maxAmount, 1, 9999999, settings.maxAmount),
       allowQuantity: kind === 'fixed' && p.allowQuantity === true,
       maxQuantity: int(p.maxQuantity, 1, 999, 99),
+      popupImage: image(p.popupImage),
       popupTitle: loc(p.popupTitle),
       popupHint: loc(p.popupHint),
     };

@@ -161,6 +161,7 @@ class CatalogService extends ChangeNotifier {
   Future<void> _prefetchImages(CatalogData d) async {
     final urls = <String>{
       for (final p in d.programs) ?remoteUrl(p.image),
+      for (final p in d.programs) ?remoteUrl(p.popupImage),
       for (final c in d.catalogs) ?remoteUrl(c.image),
       ?remoteUrl(d.settings.welcomeBackground),
     };

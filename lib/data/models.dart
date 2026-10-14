@@ -96,6 +96,7 @@ class Program {
     this.maxAmount = 99999,
     this.allowQuantity = false,
     this.maxQuantity = 99,
+    this.popupImage = '',
     this.popupTitle = Localized.empty,
     this.popupHint = Localized.empty,
     this.active = true,
@@ -115,6 +116,7 @@ class Program {
   final int maxQuantity;
 
   /// نافذة المبلغ (للنوع free): العبارة العلوية ونص الحقل.
+  final String popupImage;
   final Localized popupTitle;
   final Localized popupHint;
 
@@ -143,6 +145,7 @@ class Program {
       maxAmount: _int(j['maxAmount'], 99999, min: 1),
       allowQuantity: j['allowQuantity'] == true,
       maxQuantity: _int(j['maxQuantity'], 99, min: 1, max: 999),
+      popupImage: j['popupImage'] is String ? j['popupImage'] as String : '',
       popupTitle: Localized.from(j['popupTitle']),
       popupHint: Localized.from(j['popupHint']),
     );

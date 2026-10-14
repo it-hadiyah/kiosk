@@ -474,6 +474,31 @@ void main() {
       expect(find.text('75 ر.س'), findsWidgets);
     });
 
+    testWidgets('free popup renders with a background image', (t) async {
+      await start(
+        t,
+        _data(
+          programs: [
+            _prog(
+              'z',
+              extra: {
+                'kind': 'free',
+                'popupImage': 'asset:assets/images/p_water.jpg',
+              },
+            ),
+          ],
+          home: [
+            {'type': 'program', 'id': 'z'},
+          ],
+        ),
+      );
+      await t.tap(find.byKey(const Key('program_z')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('amount_popup')), findsOneWidget);
+      expect(find.byType(AppImage), findsWidgets);
+      expect(t.takeException(), isNull);
+    });
+
     testWidgets('free popup can be closed without donating', (t) async {
       await start(
         t,
