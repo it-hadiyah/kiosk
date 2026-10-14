@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'l10n/strings.dart';
-import 'screens/home_screen.dart';
+import 'screens/projects_screen.dart';
 import 'state/donation_state.dart';
 import 'theme/theme.dart';
 
@@ -111,7 +111,8 @@ class _KioskAppState extends State<KioskApp> {
           GlobalCupertinoLocalizations.delegate,
         ],
         theme: buildTheme(),
-        home: HomeScreen(state: _state),
+        builder: kioskFrame,
+        home: ProjectsScreen(state: _state),
       ),
     );
   }
