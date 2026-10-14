@@ -75,45 +75,22 @@ class _TileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = tile.size;
-    final r = BorderRadius.circular(
-      context.d(size == TileSize.small ? 26 : 32),
-    );
-    final img = AppImage(
-      service: service,
-      src: tile.image,
-      alignment: tile.align,
-    );
+    final small = size == TileSize.small;
+    final r = BorderRadius.circular(context.d(small ? 28 : 34));
+    final height = context.d(size == TileSize.large ? 330 : 360);
     final title = tile.title(lang);
-
-    Widget label(double font, {int lines = 1}) => Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            maxLines: lines,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: context.d(font),
-              height: 1.25,
-              fontWeight: FontWeight.w500,
-              color: HColors.ink,
-            ),
-          ),
-        ),
-        if (size != TileSize.small)
-          Icon(
-            Icons.arrow_forward_ios_rounded,
-            size: context.d(28),
-            color: HColors.teal,
-          ),
-      ],
-    );
+    final titleSize = switch (size) {
+      TileSize.small => 30.0,
+      TileSize.medium => 40.0,
+      TileSize.large => 52.0,
+    };
+    final pad = context.d(small ? 20 : 28);
 
     final badge = tile.catalog == null
         ? null
         : PositionedDirectional(
-            top: context.d(14),
-            start: context.d(14),
+            top: context.d(16),
+            start: context.d(16),
             child: Container(
               key: Key('badge_${tile.key}'),
               padding: EdgeInsets.symmetric(
@@ -121,7 +98,7 @@ class _TileCard extends StatelessWidget {
                 vertical: context.d(8),
               ),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: .55),
+                color: Colors.black.withValues(alpha: .5),
                 borderRadius: BorderRadius.circular(context.d(20)),
               ),
               child: Row(
@@ -146,58 +123,73 @@ class _TileCard extends StatelessWidget {
             ),
           );
 
-    final Widget content = switch (size) {
-      TileSize.large => SizedBox(
-        height: context.d(230),
-        child: Row(
-          children: [
-            SizedBox(
-              width: context.d(400),
-              height: double.infinity,
-              child: Stack(fit: StackFit.expand, children: [img, ?badge]),
+    // الصورة تملأ البطاقة كلها، والاسم فوقها على تدرّج داكن خفيف (بدون شريط أبيض)
+    final content = Stack(
+      fit: StackFit.expand,
+      children: [
+        AppImage(service: service, src: tile.image, alignment: tile.align),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0, .42, 1],
+              colors: [Color(0x00000000), Color(0x00000000), Color(0xD9062B27)],
             ),
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: context.d(34)),
-                child: label(44, lines: 2),
+          ),
+        ),
+        ?badge,
+        Positioned.fill(
+          child: Padding(
+            padding: EdgeInsets.all(pad),
+            child: Align(
+              alignment: AlignmentDirectional.bottomStart,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: small ? 3 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: context.d(titleSize),
+                        height: 1.2,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        shadows: const [
+                          Shadow(
+                            color: Color(0x99000000),
+                            blurRadius: 8,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (!small) ...[
+                    SizedBox(width: context.d(12)),
+                    Container(
+                      width: context.d(52),
+                      height: context.d(52),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .22),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        size: context.d(30),
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ],
+          ),
         ),
-      ),
-      TileSize.small => Column(
-        children: [
-          SizedBox(
-            height: context.d(190),
-            width: double.infinity,
-            child: Stack(fit: StackFit.expand, children: [img, ?badge]),
-          ),
-          SizedBox(
-            height: context.d(96),
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: context.d(16)),
-              child: Center(child: label(28, lines: 2)),
-            ),
-          ),
-        ],
-      ),
-      TileSize.medium => Column(
-        children: [
-          SizedBox(
-            height: context.d(220),
-            width: double.infinity,
-            child: Stack(fit: StackFit.expand, children: [img, ?badge]),
-          ),
-          SizedBox(
-            height: context.d(96),
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: context.d(28)),
-              child: label(36),
-            ),
-          ),
-        ],
-      ),
-    };
+      ],
+    );
 
     return FadeSlideIn(
       delayMs: 100 + order * 70,
@@ -205,12 +197,13 @@ class _TileCard extends StatelessWidget {
         key: Key(tile.key),
         onTap: () => onOpen(tile),
         child: Container(
+          height: height,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: HColors.tealLight,
             borderRadius: r,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: .07),
+                color: Colors.black.withValues(alpha: .12),
                 blurRadius: context.d(24),
                 offset: Offset(0, context.d(8)),
               ),
