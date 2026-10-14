@@ -87,7 +87,14 @@ const serverBackend = {
     const d = await this._req('/api/login', { method: 'POST', auth: false, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
     this._setTk(d.token); return true;
   },
-  async load() { const d = await this._req('/api/admin/catalog'); return { catalog: d.catalog, hasUnpublished: !!d.hasUnpublished }; },
+  features: { roles: true, audit: true, stats: true, media: true, deleteMedia: true },
+  async me() { return this._req('/api/admin/me'); },
+  async media() { return (await this._req('/api/admin/media')).media; },
+  async deleteMedia(name) { return this._req('/api/admin/media?name=' + encodeURIComponent(name), { method: 'DELETE' }); },
+  async audit() { return (await this._req('/api/admin/audit')).entries; },
+  async stats() { return (await this._req('/api/admin/stats')).stats; },
+  async resetStats() { return this._req('/api/admin/stats', { method: 'DELETE' }); },
+  async load() { const d = await this._req('/api/admin/catalog'); return { catalog: d.catalog, hasUnpublished: !!d.hasUnpublished, liveUpdatedAt: d.liveUpdatedAt || '' }; },
   async save(catalog) {
     const d = await this._req('/api/admin/catalog', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ catalog }) });
     return { catalog: d.catalog, warnings: d.warnings || [], hasUnpublished: !!d.hasUnpublished };
@@ -122,6 +129,7 @@ const ui = {
 };
 let saveTimer = null;
 
+const VIEWS = {};   // يضيف extras.js أقساماً إضافية
 const TABS = [
   { k: 'home', label: 'الصفحة الرئيسية', icon: 'home' },
   { k: 'programs', label: 'البرامج', icon: 'grid' },
@@ -364,9 +372,13 @@ function catTiles(c) {
 function langSwitch() {
   return `<div class="seg pv-lang" role="group" aria-label="لغة المعاينة">${LANGS.map((l) => `<button type="button" data-act="pv-lang" data-v="${l.k}" aria-pressed="${ui.pvLang === l.k}">${l.name}</button>`).join('')}</div>`;
 }
+const DEVICES = [['mobile', 'جوال'], ['tablet', 'تابلت'], ['kiosk', 'كيوسك عمودي'], ['landscape', 'كيوسك أفقي']];
+function deviceSwitch() {
+  return `<div class="seg pv-dev" role="group" aria-label="جهاز المعاينة">${DEVICES.map(([k, n]) => `<button type="button" data-act="pv-dev" data-v="${k}" aria-pressed="${(ui.pvDev || 'mobile') === k}">${n}</button>`).join('')}</div>`;
+}
 function phone(inner, lang) {
   const L = LANGS.find((l) => l.k === lang);
-  return `<div class="phone" dir="${L.dir}" lang="${lang}"><div class="pv-screen">${inner}</div></div>`;
+  return `<div class="phone dev-${ui.pvDev || 'mobile'}" dir="${L.dir}" lang="${lang}"><div class="pv-screen">${inner}</div></div>`;
 }
 const FEAT_DEF = { ar: ['الأكثر رواجاً', 'تبرع الآن'], fr: ['Les plus populaires', 'Donner'], en: ['Most popular', 'Donate now'], ur: ['سب سے مقبول', 'عطیہ کریں'] };
 function featItems() {
@@ -376,7 +388,7 @@ function featPreview(lang) {
   const F = C().featured; const it = featItems(); if (!F.enabled || !it.length) return '';
   const i = ((ui.featIdx || 0) % it.length + it.length) % it.length; const cur = it[i];
   const badgeTxt = F.title[lang] || (F.title.ar && lang === 'ar' ? F.title.ar : FEAT_DEF[lang][0]);
-  return `<div class="pv-feat" aria-label="الأكثر رواجاً"><div class="pv-slide" key="${i}">${imgTag(cur.obj.image, cur.obj.imageAlign)}
+  return `<div class="pv-feat" aria-label="الأكثر رواجاً"><div class="pv-slide" key="${i}" data-tile="${esc(cur.type)}:${esc(cur.obj.id)}">${imgTag(cur.obj.image, cur.obj.imageAlign)}
     <span class="pv-fbadge">${ic('flame')}${esc(badgeTxt)}</span>
     <div class="pv-ftxt"><h4>${esc(tt(cur.obj, lang))}</h4><span class="pv-pill">${FEAT_DEF[lang][1]}</span></div>
     <button type="button" class="pv-nav prev" data-act="feat-step" data-d="-1" aria-label="السابق">${ic('down')}</button>
@@ -387,14 +399,14 @@ function homePreview() {
   const lang = ui.pvLang, S = C().settings;
   const title = S.homeTitle[lang] || S.homeTitle.ar, sub = S.homeSubtitle[lang] || S.homeSubtitle.ar;
   const head = `<div class="pv-head"><h4>${title ? esc(title) : '<span class="muted">(العنوان الافتراضي للتطبيق)</span>'}</h4>${sub ? `<p>${esc(sub)}</p>` : ''}</div>`;
-  return `<div class="pv-box"><div class="pv-top"><strong>معاينة صفحة المتبرع</strong>${langSwitch()}</div>${phone(featPreview(lang) + head + `<div class="pv-grid" id="pvHomeGrid">${rowsHtml(homeTiles(), lang)}</div>`, lang)}
-    <p class="hint center">المعاينة تقريبية: كل بطاقة تأخذ ثلث/نصف/كامل عرض الصفحة وتُرصّ كما في التطبيق.</p></div>`;
+  return `<div class="pv-box"><div class="pv-top"><strong>معاينة صفحة المتبرع</strong>${langSwitch()}${deviceSwitch()}</div>${phone(featPreview(lang) + head + `<div class="pv-grid" id="pvHomeGrid">${rowsHtml(homeTiles(), lang)}</div>`, lang)}
+    <p class="hint center">المعاينة تقريبية. <strong>اضغط أي بطاقة لتعديلها مباشرة.</strong></p></div>`;
 }
 function catPreview(c) {
   const lang = ui.pvLang;
   const sub = c.subtitle && (c.subtitle[lang] || c.subtitle.ar);
   const banner = `<div class="pv-banner">${imgTag(c.image, c.imageAlign)}<div class="pv-banner-t"><h4>${esc(tt(c, lang))}</h4>${sub ? `<p>${esc(sub)}</p>` : ''}</div></div>`;
-  return `<div class="pv-box"><div class="pv-top"><strong>معاينة صفحة الكتالوج</strong>${langSwitch()}</div>${phone(banner + `<div class="pv-grid">${rowsHtml(catTiles(c), lang)}</div>`, lang)}</div>`;
+  return `<div class="pv-box"><div class="pv-top"><strong>معاينة صفحة الكتالوج</strong>${langSwitch()}${deviceSwitch()}</div>${phone(banner + `<div class="pv-grid">${rowsHtml(catTiles(c), lang)}</div>`, lang)}</div>`;
 }
 
 /* =====================================================================
@@ -447,7 +459,7 @@ function imagePicker(pk, opts = {}) {
     <div class="imgp-prev"><div class="crop" title="هكذا ستظهر الصورة داخل البطاقة">${url ? imgTag(url, align) : `<div class="noimg">${ic('image')}<span>لا توجد صورة</span></div>`}</div></div>
     <div class="imgp-body">
       <div class="imgp-btns"><button class="btn" type="button" data-act="img-pick">${ic('upload')}رفع صورة</button>
-        <button class="btn ghost" type="button" data-act="img-remove" ${url ? '' : 'disabled'}>${ic('trash')}إزالة</button></div>
+        ${backend.media ? `<button class="btn" type="button" data-act="img-library">${ic('image')}من المكتبة</button>` : ''}<button class="btn ghost" type="button" data-act="img-remove" ${url ? '' : 'disabled'}>${ic('trash')}إزالة</button></div>
       <p class="hint">اسحب صورة وأفلتها هنا، أو الصقها (Ctrl+V). يفضّل صورة أفقية 1200×900 فأكثر. (jpg / png / webp حتى 6MB)</p>
       <div class="field slim"><label>رابط الصورة (اختياري)</label><input type="text" dir="ltr" inputmode="url" data-img-url placeholder="https://… أو /uploads/…" value="${esc(url)}"></div>
       ${T.align ? `<div class="field slim"><label>محاذاة الصورة داخل البطاقة</label><div class="seg" role="group">${['top', 'center', 'bottom'].map((a) => `<button type="button" data-act="img-align" data-v="${a}" aria-pressed="${align === a}">${ALIGN_LABEL[a]}</button>`).join('')}</div></div>` : ''}
@@ -649,7 +661,7 @@ function viewSettings() {
 /* ---- هـ) النشر والنسخ ---- */
 function viewPublish() {
   return `<div class="page-h"><div><h2>النشر والنسخ</h2><p class="muted">ما تعدّله هنا يُحفظ كمسودة، ولا يراه المتبرعون إلا بعد «نشر التغييرات».</p></div></div>
-  <div class="stack"><div data-region="pubStatus"></div><div data-region="diff"></div><div data-region="history"></div></div>`;
+  <div class="stack"><div data-region="pubStatus"></div><div data-region="diff"></div><div data-region="history"></div><div data-region="audit"></div></div>`;
 }
 regions.pubStatus = () => {
   const un = state.dirty || state.hasUnpublished;
@@ -880,7 +892,7 @@ function renderNav() {
 function render(full = true) {
   renderNav(); updateChrome();
   if (full) {
-    const v = { home: viewHome, programs: viewPrograms, catalogs: viewCatalogs, settings: viewSettings, publish: viewPublish }[ui.tab];
+    const v = Object.assign({ home: viewHome, programs: viewPrograms, catalogs: viewCatalogs, settings: viewSettings, publish: viewPublish }, VIEWS)[ui.tab];
     $('#view').innerHTML = v(); window.scrollTo(0, 0);
   }
   refreshRegions();
@@ -915,7 +927,7 @@ function moveItem(list, from, to) {
 function refocus(sel) { setTimeout(() => { const el = $(sel); if (el && !el.disabled) el.focus(); else { const alt = $(sel.replace(/\[data-d="-?1"\]/, '[data-d="1"]')); if (alt) alt.focus(); } }, 10); }
 
 const actions = {
-  tab(el) { if (ui.edit) return; ui.tab = el.dataset.tab; render(); if (ui.tab === 'publish') loadPublishData(); },
+  tab(el) { if (ui.edit) return; ui.tab = el.dataset.tab; render(); if (ui.tab === 'publish') loadPublishData(); if (typeof onTab === 'function') onTab(ui.tab); },
   'pv-lang'(el) { ui.pvLang = el.dataset.v; ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; },
   size(el) {
     const a = listArr(el.dataset.list); a[+el.dataset.i].size = el.dataset.v; afterListChange();
@@ -940,6 +952,7 @@ const actions = {
     const v = $('#featAdd').value; if (!v || !v.includes(':') || C().featured.items.length >= 10) return; const [t, id] = v.split(':');
     C().featured.items.push({ type: t, id }); afterListChange();
   },
+  'pv-dev'(el) { ui.pvDev = el.dataset.v; ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; },
   'feat-step'(el) { ui.featIdx = (ui.featIdx || 0) + (+el.dataset.d); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; },
   'feat-go'(el) { ui.featIdx = +el.dataset.i; ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; refocus(`[data-act="feat-go"][data-i="${el.dataset.i}"]`); },
   'item-add'() {
@@ -1055,6 +1068,7 @@ async function loadPublishData() {
   refreshRegions();
   try { ui.hist = await backend.history(); } catch (e) { ui.hist = []; }
   refreshRegions();
+  if (typeof loadAudit === 'function') loadAudit();
 }
 async function doPublish() {
   if (ui.pubBusy) return;
@@ -1200,7 +1214,7 @@ $('#loginForm').addEventListener('submit', async (ev) => {
 async function boot() {
   try {
     const d = await backend.load();
-    state.catalog = normClient(d.catalog); state.hasUnpublished = d.hasUnpublished; state.dirty = false;
+    state.catalog = normClient(d.catalog); state.hasUnpublished = d.hasUnpublished; state.dirty = false; state.liveAt = d.liveUpdatedAt || '';
     const S = C().settings; S.homeTitle = Object.assign(blankLoc(), S.homeTitle); S.homeSubtitle = Object.assign(blankLoc(), S.homeSubtitle);
   } catch (e) {
     if (e.status === 401) return showLogin();
@@ -1210,7 +1224,9 @@ async function boot() {
   $('#demoBadge').hidden = backend.kind !== 'demo';
   $('#btnLogout').hidden = backend.kind === 'demo'; $('#btnLogout').innerHTML = ic('logout') + '<span>خروج</span>';
   $('#drawer .icon-btn').innerHTML = ic('x');
+  if (typeof onBoot === 'function') await onBoot();
   render();
+  if (typeof onTab === 'function') onTab(ui.tab);
 }
 (function start() {
   if (backend.kind === 'demo' || (backend.hasSession && backend.hasSession())) boot(); else showLogin();

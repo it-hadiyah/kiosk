@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """يبني نسخة تجريبية بملف HTML واحد من لوحة التحكم (للنشر كـ Artifact):
   python3 server/tools/build-demo.py  ->  server/dist/admin-demo.html
-يدمج: index.html + style.css + app.js + demo-backend.js + validate.js + البيانات التجريبية + صور مصغّرة."""
+يدمج: index.html + style.css + app.js + extras.js + demo-backend.js + validate.js + البيانات التجريبية + صور مصغّرة."""
 import base64, io, json, pathlib, re
 from PIL import Image
 
@@ -10,6 +10,7 @@ admin = root / 'public/admin'
 html = (admin / 'index.html').read_text(encoding='utf-8')
 css = (admin / 'style.css').read_text(encoding='utf-8')
 js = (admin / 'app.js').read_text(encoding='utf-8')
+extras = (admin / 'extras.js').read_text(encoding='utf-8')
 demo = (root / 'tools/demo-backend.js').read_text(encoding='utf-8')
 validate = (root / 'validate.js').read_text(encoding='utf-8')
 seed = json.loads((root / 'seed/catalog.json').read_text(encoding='utf-8'))
@@ -38,7 +39,7 @@ out = ('<title>لوحة تحكم كيوسك هدية</title>\n'
        + '\n'.join(fonts) + '\n'
        '<style>\n' + css + artifact_css + '</style>\n'
        '<div id="hd-root" dir="rtl" lang="ar">\n' + body + '\n</div>\n'
-       '<script>\n' + demo + '\n</script>\n<script>\n' + js + '\n</script>\n')
+       '<script>\n' + demo + '\n</script>\n<script>\n' + js + '\n</script>\n<script>\n' + extras + '\n</script>\n')
 (root / 'dist').mkdir(exist_ok=True)
 dest = root / 'dist/admin-demo.html'
 dest.write_text(out, encoding='utf-8')

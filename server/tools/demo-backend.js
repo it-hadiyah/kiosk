@@ -37,6 +37,14 @@
 
   window.HD_BACKEND = {
     kind: 'demo',
+    features: { roles: false, audit: false, stats: false, media: true, deleteMedia: false },
+    /* مكتبة الوسائط التجريبية: صور البيانات الافتراضية + ما رُفع في هذه النسخة */
+    async media() {
+      const out = [];
+      for (const k of Object.keys(EMBED)) out.push({ name: k + '.jpg', url: '/uploads/' + k + '.jpg', size: Math.round(EMBED[k].length * 0.75), at: '', usedBy: [] });
+      for (const [url, data] of imageCache) out.push({ name: url.split('/').pop(), url, size: Math.round(data.length * 0.75), at: '', usedBy: [] });
+      return out;
+    },
     async login() { return true; },
     async logout() {},
     async load() {

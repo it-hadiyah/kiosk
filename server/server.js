@@ -218,7 +218,8 @@ function touchDevice(id, version, lang) {
   if (!id) return;
   const S = loadStats(); const key = String(id).replace(/[^\w-]/g, '').slice(0, 24); if (!key) return;
   if (!S.devices[key] && Object.keys(S.devices).length >= 50) return;
-  S.devices[key] = { lastSeen: new Date().toISOString(), version: String(version || '').slice(0, 16), lang: String(lang || '').slice(0, 4) };
+  const prev = S.devices[key] || {};
+  S.devices[key] = { lastSeen: new Date().toISOString(), version: String(version || prev.version || '').slice(0, 16), lang: String(lang || prev.lang || '').slice(0, 4) };
   saveStatsSoon();
 }
 const EVENT_TYPES = new Set(['session_start', 'program_selected', 'amount_chosen', 'payment_started', 'payment_completed', 'session_abandoned', 'heartbeat']);

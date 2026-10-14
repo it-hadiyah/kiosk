@@ -26,7 +26,7 @@ const eq = (a, b, m) => ok(JSON.stringify(a) === JSON.stringify(b), `${m}${JSON.
 const getJson = (url, headers = {}) => new Promise((res, rej) => http.get(url, { headers }, (r) => { let b = ''; r.on('data', (c) => (b += c)); r.on('end', () => { try { res(JSON.parse(b)); } catch (e) { rej(e); } }); }).on('error', rej));
 
 async function main() {
-  const srv = spawn('node', [path.join(__dirname, '../server.js')], { env: { ...process.env, PORT, DATA_DIR: DATA, ADMIN_PASSWORD: PASS }, stdio: 'pipe' });
+  const srv = spawn('node', [path.join(__dirname, '../server.js')], { env: { ...process.env, PORT, DATA_DIR: DATA, ADMIN_PASSWORD: PASS, EDITOR_PASSWORD: 'e2e-editor', VIEWER_PASSWORD: 'e2e-viewer' }, stdio: 'pipe' });
   srv.stderr.on('data', (d) => process.stderr.write(d));
   for (let i = 0; i < 50; i++) { try { await getJson(BASE + '/api/health'); break; } catch (e) { await new Promise((r) => setTimeout(r, 100)); } }
 
@@ -250,6 +250,7 @@ async function main() {
     ok(live.settings.idleSeconds === 90 && live.settings.warnSeconds === 20 && live.settings.quickAmounts.includes(25) && live.settings.homeTitle.en === 'Give with joy' && /\.jpg$/.test(live.settings.welcomeBackground), 'published settings reflect edits');
     ok(live.featured && live.featured.enabled === true && live.featured.intervalSeconds === 7 && live.featured.title.ar === 'الأكثر طلباً', 'published featured: enabled, interval 7, badge');
     eq(live.featured.items, [{ type: 'program', id: 'iftar' }, { type: 'program', id: 'water' }], 'published featured items in order');
+    await page.waitForSelector('[data-region=history] .hist', { timeout: 8000 });
     ok((await page.$$('[data-region=history] .hist')).length >= 1, 'backup history listed after publish');
     await shot('05-publish-desktop-after');
 
@@ -343,6 +344,59 @@ async function main() {
     await page.emulateMedia({ colorScheme: 'dark' });
     for (const [k, n] of [['home', '1-home'], ['programs', '2-programs'], ['publish', '5-publish']]) { await tab(k); await page.waitForTimeout(200); await shot(`dark-${n}`); }
     await page.emulateMedia({ colorScheme: 'light' });
+
+    /* ---------- منصّة الإدارة: نظرة عامة، وسائط، تدقيق، أجهزة المعاينة، المحرر المباشر، الأدوار ---------- */
+    console.log('== platform: overview / media / audit / devices / live editor / roles');
+    // إحصائية تجريبية من «كيوسك» لتظهر في النظرة العامة
+    await fetch(BASE + '/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'session_start', deviceId: 'e2e-kiosk', appVersion: '9.9.9' }) });
+    await fetch(BASE + '/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'payment_completed', programId: 'zakat', durationMs: 12000, deviceId: 'e2e-kiosk' }) });
+    await tab('overview');
+    await page.waitForFunction(() => ui.stats && document.querySelector('[data-region=ovStats]').textContent.includes('محاكاة مكتملة'), null, { timeout: 8000 });
+    ok((await page.textContent('[data-region=ovStats]')).includes('بيانات تجريبية'), 'overview stats labelled as demo data');
+    ok((await page.textContent('[data-region=ovDevices]')).includes('e2e-kiosk') && (await page.textContent('[data-region=ovDevices]')).includes('9.9.9'), 'overview lists kiosk device with version');
+    ok((await page.$$('[data-region=ovCards] .stat')).length === 6, 'overview shows 6 summary cards');
+    ok((await page.textContent('[data-region=ovTr]')).includes('العربية'), 'translations table rendered');
+    await shot('08-overview');
+    await tab('media');
+    await page.waitForSelector('.mcard');
+    const nMedia = await page.$$eval('.mcard', (a) => a.length);
+    ok(nMedia >= 8, `media library lists uploads (${nMedia})`);
+    ok((await page.$$('.mcard .badge.kind')).length >= 1, 'media shows usage badges');
+    ok(await page.$$eval('.mcard .badge.kind', (a) => a.length) > 0 && (await page.$$('[data-act=media-del][disabled]')).length > 0, 'used images cannot be deleted');
+    const delBtn = await page.$('[data-act=media-del]:not([disabled])');
+    if (delBtn) { const before = nMedia; await delBtn.click(); await confirmYes(); await page.waitForFunction((n) => document.querySelectorAll('.mcard').length < n, before, { timeout: 8000 }); ok(true, 'unused image deleted from library'); }
+    await shot('09-media');
+    await tab('publish');
+    await page.waitForSelector('[data-region=audit] .ak', { timeout: 8000 });
+    const auditTxt = await page.textContent('[data-region=audit]');
+    ok(auditTxt.includes('نشر') && auditTxt.includes('رفع صورة') && auditTxt.includes('دخول'), 'audit log shows publish, upload, login');
+    // أجهزة المعاينة + المحرر المباشر
+    await tab('home');
+    for (const d of ['tablet', 'kiosk', 'landscape', 'mobile']) { await page.click(`[data-act=pv-dev][data-v=${d}]`); ok(await page.$eval('.phone', (e, k) => e.classList.contains('dev-' + k), d), `preview device: ${d}`); }
+    await page.click('#pvHomeGrid [data-tile]');
+    await page.waitForSelector('#drawer.open');
+    ok((await page.$eval('#drawerTitle', (e) => e.textContent)).includes('تعديل'), 'clicking a preview tile opens its editor (live editor)');
+    await page.click('#drawer [data-act=close-editor]'); await page.waitForFunction(() => !ui.edit);
+    // الأدوار: مشاهد = قراءة فقط
+    await page.click('[data-act=logout]');
+    await page.waitForSelector('#loginPw');
+    await page.fill('#loginPw', 'e2e-viewer'); await page.click('#loginBtn');
+    await page.waitForSelector('#app:not([hidden])');
+    await page.waitForFunction(() => document.body.dataset.role === 'viewer');
+    ok(await page.isHidden('#btnPublish'), 'viewer: publish button hidden');
+    await tab('programs');
+    ok(await page.$$eval('[data-act=new-prog]', (a) => a.every((b) => b.disabled)), 'viewer: cannot create programs');
+    await page.click('[data-act=edit-prog] >> nth=0'); await page.waitForSelector('#drawer.open');
+    ok(await page.$$eval('#drawerBody input[data-ctx]', (a) => a.length > 0 && a.every((i) => i.disabled)), 'viewer: editor fields are read-only');
+    await page.click('#drawer [data-act=close-editor]');
+    await page.waitForFunction(() => !ui.edit);
+    await page.click('[data-act=logout]'); await page.waitForSelector('#loginPw');
+    await page.fill('#loginPw', 'e2e-editor'); await page.click('#loginBtn');
+    await page.waitForFunction(() => document.body.dataset.role === 'editor');
+    await tab('settings');
+    await page.waitForSelector('#view .rolebar');
+    ok(await page.$$eval('#view input', (a) => a.length > 0 && a.every((i) => i.disabled)), 'editor: general settings locked');
+    ok(await page.isHidden('#btnPublish'), 'editor: publish hidden');
 
     ok(jsErrors.length === 0, 'no JS console/page errors' + (jsErrors.length ? ': ' + jsErrors.join(' | ') : ''));
   } catch (e) {
