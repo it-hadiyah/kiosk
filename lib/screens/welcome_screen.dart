@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/catalog_service.dart';
 import '../l10n/strings.dart';
 import '../state/donation_state.dart';
 import '../theme/theme.dart';
@@ -60,9 +61,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/images/welcome_bg.jpg',
-            fit: BoxFit.cover,
+          AppImage(
+            service: st.catalog,
+            src: st.data.settings.welcomeBackground.isEmpty
+                ? 'asset:assets/images/welcome_bg.jpg'
+                : st.data.settings.welcomeBackground,
+            fallback: 'asset:assets/images/welcome_bg.jpg',
             alignment: Alignment.topCenter,
           ),
           // تعتيم خفيف أسفل الصورة لوضوح الأزرار

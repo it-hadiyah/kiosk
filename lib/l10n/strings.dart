@@ -56,6 +56,15 @@ class S {
   );
   String get otherAmount =>
       _t('مبلغ آخر', 'Autre montant', 'Other amount', 'دوسری رقم');
+  String get quantity => _t('الكمية', 'Quantité', 'Quantity', 'تعداد');
+  String get fixedAmount =>
+      _t('قيمة ثابتة', 'Montant fixe', 'Fixed amount', 'مقررہ رقم');
+  String get offline => _t(
+    'تعذّر تحميل الصورة',
+    'Image indisponible',
+    'Image unavailable',
+    'تصویر دستیاب نہیں',
+  );
   String get amountLabel => _t('المبلغ', 'Montant', 'Amount', 'رقم');
   String get continueToPay => _t(
     'المتابعة للدفع',

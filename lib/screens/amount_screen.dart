@@ -1,6 +1,9 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
-import '../data/projects.dart';
+import '../data/catalog_service.dart';
+import '../data/models.dart';
 import '../l10n/strings.dart';
 import '../state/donation_state.dart';
 import '../theme/theme.dart';
@@ -8,7 +11,8 @@ import '../widgets/common.dart';
 import '../widgets/numpad.dart';
 import 'payment_screen.dart';
 
-/// الخطوة 2 — تحديد مبلغ التبرع (مبالغ سريعة أو مبلغ مخصص بالأرقام).
+/// الخطوة 2 — تحديد المبلغ. السلوك حسب نوع البرنامج:
+/// open = مبالغ سريعة + «مبلغ آخر» · presets = مبالغ محددة فقط · fixed = قيمة ثابتة (مع كمية اختيارية).
 class AmountScreen extends StatefulWidget {
   const AmountScreen({super.key, required this.state});
   final DonationState state;
@@ -21,10 +25,33 @@ class _AmountScreenState extends State<AmountScreen> {
   int? _preset;
   bool _custom = false;
   String _digits = '';
+  int _qty = 1;
   bool _navigating = false;
 
-  int get _amount => _custom ? (int.tryParse(_digits) ?? 0) : (_preset ?? 0);
-  bool get _valid => _amount >= 1 && _amount <= kMaxAmount;
+  Program get _p => widget.state.program!;
+  AppSettings get _set => widget.state.data.settings;
+  int get _min => _p.minAmount;
+  int get _max => min(_p.maxAmount, _set.maxAmount);
+
+  /// المبالغ الجاهزة المعروضة (خاصة بالبرنامج أو العامة)، ضمن الحدود.
+  List<int> get _presets {
+    final src = _p.presets.isNotEmpty ? _p.presets : _set.quickAmounts;
+    final ok = src.where((a) => a >= _min && a <= _max).toList();
+    return ok.isNotEmpty ? ok : src;
+  }
+
+  int get _amount {
+    if (_p.kind == ProgramKind.fixed) return _p.price * _qty;
+    return _custom ? (int.tryParse(_digits) ?? 0) : (_preset ?? 0);
+  }
+
+  bool get _valid {
+    if (_p.kind == ProgramKind.fixed) {
+      return _p.price >= 1 && _qty >= 1 && _amount <= _set.maxAmount;
+    }
+    final a = _amount;
+    return a >= _min && a <= _max;
+  }
 
   void _pickPreset(int a) => setState(() {
     _custom = false;
@@ -39,8 +66,11 @@ class _AmountScreenState extends State<AmountScreen> {
   });
 
   void _digit(String d) {
-    if (_digits.length >= 5) return;
-    setState(() => _digits = _digits == '' && d == '0' ? '' : _digits + d);
+    final next = (_digits == '' && d == '0') ? '' : _digits + d;
+    if (next.length > '$_max'.length || (int.tryParse(next) ?? 0) > _max) {
+      return; // لا يتجاوز الحد الأعلى
+    }
+    setState(() => _digits = next);
   }
 
   void _backspace() {
@@ -66,8 +96,11 @@ class _AmountScreenState extends State<AmountScreen> {
   Widget _page(BuildContext context) {
     final st = widget.state;
     final s = S(st.lang);
-    final p = st.project;
-    if (p == null) return const SizedBox.shrink(); // الجلسة انتهت أثناء الإغلاق
+    if (st.program == null) {
+      return const SizedBox.shrink(); // الجلسة انتهت أثناء الإغلاق
+    }
+    final p = _p;
+    final fixed = p.kind == ProgramKind.fixed;
     return Scaffold(
       body: Column(
         children: [
@@ -84,81 +117,21 @@ class _AmountScreenState extends State<AmountScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   FadeSlideIn(
-                    child: _ProjectHeader(project: p, lang: s.lang),
+                    child: _ProgramHeader(
+                      program: p,
+                      lang: st.lang,
+                      service: st.catalog,
+                    ),
                   ),
                   SizedBox(height: context.d(44)),
-                  FadeSlideIn(
-                    delayMs: 80,
-                    child: Text(
-                      s.chooseAmount,
-                      style: TextStyle(
-                        fontSize: context.d(48),
-                        fontWeight: FontWeight.w700,
-                        color: HColors.ink,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: context.d(26)),
-                  FadeSlideIn(
-                    delayMs: 140,
-                    child: Row(
-                      children: [
-                        for (var i = 0; i < kQuickAmounts.length; i++) ...[
-                          if (i > 0) SizedBox(width: context.d(20)),
-                          Expanded(
-                            child: _AmountTile(
-                              key: Key('amount_${kQuickAmounts[i]}'),
-                              value: kQuickAmounts[i],
-                              currency: s.sar,
-                              selected: !_custom && _preset == kQuickAmounts[i],
-                              onTap: () => _pickPreset(kQuickAmounts[i]),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: context.d(20)),
-                  FadeSlideIn(
-                    delayMs: 200,
-                    child: Pressable(
-                      key: const Key('amount_other'),
-                      onTap: _openCustom,
-                      child: AnimatedContainer(
-                        duration: context.ms(220),
-                        height: context.d(96),
-                        alignment: Alignment.center,
-                        decoration: _tileDecoration(context, _custom),
-                        child: Text(
-                          s.otherAmount,
-                          style: TextStyle(
-                            fontSize: context.d(34),
-                            fontWeight: FontWeight.w500,
-                            color: _custom ? HColors.teal : HColors.ink,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  AnimatedSize(
-                    duration: context.ms(280),
-                    curve: Curves.easeOutCubic,
-                    alignment: Alignment.topCenter,
-                    child: _custom
-                        ? Padding(
-                            padding: EdgeInsets.only(top: context.d(16)),
-                            child: NumPad(
-                              onDigit: _digit,
-                              onBackspace: _backspace,
-                            ),
-                          )
-                        : const SizedBox(width: double.infinity),
-                  ),
+                  if (fixed)
+                    ..._fixedSection(context, s)
+                  else
+                    ..._chooseSection(context, s),
                 ],
               ),
             ),
           ),
-          // ملخص المبلغ + الزر الرئيسي (ثابتان أسفل الشاشة)
           Container(
             color: Colors.white,
             padding: EdgeInsets.fromLTRB(
@@ -190,7 +163,7 @@ class _AmountScreenState extends State<AmountScreen> {
                         ),
                       ),
                       child: Text(
-                        _amount == 0 ? '0 ${s.sar}' : '$_amount ${s.sar}',
+                        '$_amount ${s.sar}',
                         key: ValueKey(_amount),
                         style: TextStyle(
                           fontSize: context.d(60),
@@ -213,6 +186,169 @@ class _AmountScreenState extends State<AmountScreen> {
         ],
       ),
     );
+  }
+
+  // ---------- قيمة ثابتة ----------
+  List<Widget> _fixedSection(BuildContext context, S s) {
+    return [
+      FadeSlideIn(
+        delayMs: 80,
+        child: Container(
+          key: const Key('fixed_card'),
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(vertical: context.d(40)),
+          decoration: BoxDecoration(
+            color: HColors.tealLight,
+            borderRadius: BorderRadius.circular(context.d(32)),
+            border: Border.all(color: HColors.teal, width: context.d(3)),
+          ),
+          child: Column(
+            children: [
+              Text(
+                s.fixedAmount,
+                style: TextStyle(fontSize: context.d(30), color: HColors.muted),
+              ),
+              SizedBox(height: context.d(8)),
+              Text(
+                '${_p.price} ${s.sar}',
+                style: TextStyle(
+                  fontSize: context.d(84),
+                  fontWeight: FontWeight.w700,
+                  color: HColors.teal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      if (_p.allowQuantity) ...[
+        SizedBox(height: context.d(36)),
+        FadeSlideIn(
+          delayMs: 140,
+          child: Row(
+            children: [
+              Text(
+                s.quantity,
+                style: TextStyle(
+                  fontSize: context.d(40),
+                  fontWeight: FontWeight.w700,
+                  color: HColors.ink,
+                ),
+              ),
+              const Spacer(),
+              _StepButton(
+                key: const Key('qty_minus'),
+                icon: Icons.remove_rounded,
+                onTap: _qty > 1 ? () => setState(() => _qty--) : null,
+              ),
+              SizedBox(
+                width: context.d(150),
+                child: Center(
+                  child: Text(
+                    '$_qty',
+                    key: const Key('qty_value'),
+                    style: TextStyle(
+                      fontSize: context.d(64),
+                      fontWeight: FontWeight.w700,
+                      color: HColors.ink,
+                    ),
+                  ),
+                ),
+              ),
+              _StepButton(
+                key: const Key('qty_plus'),
+                icon: Icons.add_rounded,
+                onTap:
+                    (_qty < _p.maxQuantity &&
+                        _p.price * (_qty + 1) <= _set.maxAmount)
+                    ? () => setState(() => _qty++)
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ],
+    ];
+  }
+
+  // ---------- مبالغ سريعة / محددة ----------
+  List<Widget> _chooseSection(BuildContext context, S s) {
+    final canCustom = _p.kind == ProgramKind.open;
+    return [
+      FadeSlideIn(
+        delayMs: 80,
+        child: Text(
+          s.chooseAmount,
+          style: TextStyle(
+            fontSize: context.d(48),
+            fontWeight: FontWeight.w700,
+            color: HColors.ink,
+          ),
+        ),
+      ),
+      SizedBox(height: context.d(26)),
+      FadeSlideIn(
+        delayMs: 140,
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final gap = context.d(20);
+            final w = (c.maxWidth - gap * 3) / 4;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (final a in _presets)
+                  SizedBox(
+                    width: w,
+                    child: _AmountTile(
+                      key: Key('amount_$a'),
+                      value: a,
+                      currency: s.sar,
+                      selected: !_custom && _preset == a,
+                      onTap: () => _pickPreset(a),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+      if (canCustom) ...[
+        SizedBox(height: context.d(20)),
+        FadeSlideIn(
+          delayMs: 200,
+          child: Pressable(
+            key: const Key('amount_other'),
+            onTap: _openCustom,
+            child: AnimatedContainer(
+              duration: context.ms(220),
+              height: context.d(96),
+              alignment: Alignment.center,
+              decoration: _tileDecoration(context, _custom),
+              child: Text(
+                s.otherAmount,
+                style: TextStyle(
+                  fontSize: context.d(34),
+                  fontWeight: FontWeight.w500,
+                  color: _custom ? HColors.teal : HColors.ink,
+                ),
+              ),
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: context.ms(280),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _custom
+              ? Padding(
+                  padding: EdgeInsets.only(top: context.d(16)),
+                  child: NumPad(onDigit: _digit, onBackspace: _backspace),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    ];
   }
 }
 
@@ -251,13 +387,16 @@ class _AmountTile extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              '$value',
-              style: TextStyle(
-                fontSize: context.d(52),
-                height: 1.15,
-                fontWeight: FontWeight.w700,
-                color: selected ? HColors.teal : HColors.ink,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '$value',
+                style: TextStyle(
+                  fontSize: context.d(52),
+                  height: 1.15,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? HColors.teal : HColors.ink,
+                ),
               ),
             ),
             Text(
@@ -274,10 +413,38 @@ class _AmountTile extends StatelessWidget {
   }
 }
 
-class _ProjectHeader extends StatelessWidget {
-  const _ProjectHeader({required this.project, required this.lang});
-  final Project project;
+class _StepButton extends StatelessWidget {
+  const _StepButton({super.key, required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = onTap != null;
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        width: context.d(120),
+        height: context.d(120),
+        decoration: BoxDecoration(
+          color: on ? HColors.teal : const Color(0xFFD5DDDC),
+          borderRadius: BorderRadius.circular(context.d(32)),
+        ),
+        child: Icon(icon, size: context.d(60), color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _ProgramHeader extends StatelessWidget {
+  const _ProgramHeader({
+    required this.program,
+    required this.lang,
+    required this.service,
+  });
+  final Program program;
   final AppLang lang;
+  final CatalogService service;
 
   @override
   Widget build(BuildContext context) {
@@ -298,18 +465,20 @@ class _ProjectHeader extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(context.d(24)),
-            child: Image.asset(
-              project.image,
+            child: SizedBox(
               width: context.d(220),
               height: context.d(220),
-              fit: BoxFit.cover,
-              alignment: project.align,
+              child: AppImage(
+                service: service,
+                src: program.image,
+                alignment: program.align,
+              ),
             ),
           ),
           SizedBox(width: context.d(28)),
           Expanded(
             child: Text(
-              project.title(lang),
+              program.title.of(lang),
               key: const Key('project_name'),
               style: TextStyle(
                 fontSize: context.d(54),

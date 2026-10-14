@@ -89,7 +89,7 @@ void main() {
       await _openProjects(t);
       expect(find.text('عطاؤك يصنع أثراً'), findsOneWidget);
 
-      await t.tap(find.byKey(const Key('project_iftar')));
+      await t.tap(find.byKey(const Key('program_iftar')));
       await t.pumpAndSettle();
       expect(find.byKey(const Key('project_name')), findsOneWidget);
 
@@ -124,7 +124,7 @@ void main() {
     await t.pumpWidget(const KioskApp());
     await _wait(t);
     await _openProjects(t);
-    await t.tap(find.byKey(const Key('project_quran')));
+    await t.tap(find.byKey(const Key('program_quran')));
     await t.pumpAndSettle();
 
     await t.tap(find.byKey(const Key('amount_other')));
@@ -140,7 +140,7 @@ void main() {
 
     await t.tap(find.byKey(const Key('back')));
     await t.pumpAndSettle();
-    expect(find.byKey(const Key('project_zakat')), findsOneWidget);
+    expect(find.byKey(const Key('program_zakat')), findsOneWidget);
   });
 
   testWidgets('cancel during simulation returns to amount, no leaked timers', (
@@ -150,7 +150,7 @@ void main() {
     await t.pumpWidget(const KioskApp());
     await _wait(t);
     await _openProjects(t);
-    await t.tap(find.byKey(const Key('project_water')));
+    await t.tap(find.byKey(const Key('program_water')));
     await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('amount_10')));
     await t.pumpAndSettle();
@@ -205,9 +205,9 @@ void main() {
         await _wait(t, 500);
         await _openProjects(t);
         await t.pumpAndSettle();
-        await t.ensureVisible(find.byKey(const Key('project_meal')));
+        await t.ensureVisible(find.byKey(const Key('program_meal')));
         await t.pumpAndSettle();
-        await t.tap(find.byKey(const Key('project_meal')));
+        await t.tap(find.byKey(const Key('program_meal')));
         await t.pumpAndSettle();
         await t.tap(find.byKey(const Key('amount_50')));
         await t.pumpAndSettle();

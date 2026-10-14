@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 
-import '../data/projects.dart';
+import '../data/models.dart';
 import '../l10n/strings.dart';
 import '../state/donation_state.dart';
 import '../theme/theme.dart';
 import '../widgets/common.dart';
+import '../widgets/tile_grid.dart';
 import 'amount_screen.dart';
+import 'catalog_screen.dart';
 
-/// الخطوة 1 — اختيار المشروع.
+/// الخطوة 1 — اختيار البرنامج (أو الكتالوج). المحتوى والأحجام من لوحة التحكم.
 class ProjectsScreen extends StatefulWidget {
   const ProjectsScreen({super.key, required this.state});
   final DonationState state;
@@ -19,12 +21,17 @@ class ProjectsScreen extends StatefulWidget {
 class _ProjectsScreenState extends State<ProjectsScreen> {
   bool _navigating = false;
 
-  Future<void> _open(Project p) async {
+  Future<void> _open(Tile t) async {
     if (_navigating) return; // يمنع الضغط المزدوج
     _navigating = true;
-    widget.state.project = p;
-    await Navigator.of(context)
-        .push(kioskRoute(AmountScreen(state: widget.state)));
+    final st = widget.state;
+    if (t.catalog != null) {
+      await Navigator.of(context)
+          .push(kioskRoute(CatalogScreen(state: st, catalogId: t.catalog!.id)));
+    } else {
+      st.program = t.program;
+      await Navigator.of(context).push(kioskRoute(AmountScreen(state: st)));
+    }
     _navigating = false;
   }
 
@@ -35,21 +42,12 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   );
 
   Widget _page(BuildContext context) {
-    final s = S(widget.state.lang);
-    final gap = context.d(34);
-    final pairs = <Widget>[];
-    var i = 0;
-    for (; i + 1 < kProjects.length; i += 2) {
-      pairs.add(
-        Row(
-          children: [
-            Expanded(child: _card(context, kProjects[i], i)),
-            SizedBox(width: gap),
-            Expanded(child: _card(context, kProjects[i + 1], i + 1)),
-          ],
-        ),
-      );
-    }
+    final st = widget.state;
+    final s = S(st.lang);
+    final data = st.data;
+    final title = data.settings.homeTitle.exact(st.lang);
+    final sub = data.settings.homeSubtitle.exact(st.lang);
+    final tiles = data.homeTiles;
     return Scaffold(
       body: Column(
         children: [
@@ -57,14 +55,14 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             s: s,
             iconBack: true,
             onBack: () => Navigator.of(context).pop(),
-            lang: widget.state.lang,
-            onLang: widget.state.setLang,
+            lang: st.lang,
+            onLang: st.setLang,
           ),
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
                 context.d(53),
-                context.d(48),
+                context.d(40),
                 context.d(53),
                 context.d(40),
               ),
@@ -73,7 +71,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                 children: [
                   FadeSlideIn(
                     child: Text(
-                      s.headline,
+                      title.isEmpty ? s.headline : title,
                       style: TextStyle(
                         fontSize: context.d(62),
                         fontWeight: FontWeight.w700,
@@ -85,7 +83,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   FadeSlideIn(
                     delayMs: 60,
                     child: Text(
-                      s.headlineSub,
+                      sub.isEmpty ? s.headlineSub : sub,
                       style: TextStyle(
                         fontSize: context.d(34),
                         color: HColors.muted,
@@ -93,109 +91,31 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                     ),
                   ),
                   SizedBox(height: context.d(40)),
-                  for (final r in pairs) ...[r, SizedBox(height: gap)],
-                  if (i < kProjects.length)
-                    _card(context, kProjects[i], i, wide: true),
+                  if (tiles.isEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(top: context.d(120)),
+                      child: Center(
+                        child: Text(
+                          '—',
+                          style: TextStyle(
+                            fontSize: context.d(80),
+                            color: HColors.muted,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    TileGrid(
+                      tiles: tiles,
+                      lang: st.lang,
+                      service: st.catalog,
+                      onOpen: _open,
+                    ),
                 ],
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _card(
-    BuildContext context,
-    Project p,
-    int index, {
-    bool wide = false,
-  }) {
-    final s = S(widget.state.lang);
-    final r = BorderRadius.circular(context.d(32));
-    final label = Row(
-      children: [
-        Expanded(
-          child: Text(
-            p.title(s.lang),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: context.d(wide ? 44 : 36),
-              fontWeight: FontWeight.w500,
-              color: HColors.ink,
-            ),
-          ),
-        ),
-        Icon(
-          Icons.arrow_forward_ios_rounded,
-          size: context.d(28),
-          color: HColors.teal,
-        ),
-      ],
-    );
-    final image = Image.asset(p.image, fit: BoxFit.cover, alignment: p.align);
-    return FadeSlideIn(
-      delayMs: 100 + index * 70,
-      child: Pressable(
-        key: Key('project_${p.id}'),
-        onTap: () => _open(p),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: r,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: .07),
-                blurRadius: context.d(24),
-                offset: Offset(0, context.d(8)),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: r,
-            child: wide
-                // البطاقة العريضة الأخيرة: صورة بجانب العنوان
-                ? SizedBox(
-                    height: context.d(230),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: context.d(400),
-                          height: double.infinity,
-                          child: image,
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: context.d(34),
-                            ),
-                            child: label,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : Column(
-                    children: [
-                      SizedBox(
-                        height: context.d(220),
-                        width: double.infinity,
-                        child: image,
-                      ),
-                      SizedBox(
-                        height: context.d(96),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: context.d(28),
-                          ),
-                          child: label,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
       ),
     );
   }

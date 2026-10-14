@@ -86,6 +86,7 @@ class _PaymentScreenState extends State<PaymentScreen>
       t.cancel();
     }
     widget.state.reset();
+    widget.state.catalog.refresh(); // الزائر التالي يرى أحدث نسخة
     Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
@@ -108,7 +109,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   Widget _page(BuildContext context) {
     final st = widget.state;
     final s = S(st.lang);
-    final project = st.project;
+    final project = st.program;
     if (project == null) {
       return const SizedBox.shrink(); // الجلسة انتهت أثناء الإغلاق
     }
@@ -132,7 +133,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                     DemoBadge(text: s.demoBadge),
                     SizedBox(height: context.d(36)),
                     Text(
-                      project.title(s.lang),
+                      project.title.of(s.lang),
                       style: TextStyle(
                         fontSize: context.d(40),
                         color: HColors.muted,

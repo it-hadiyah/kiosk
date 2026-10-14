@@ -1,13 +1,20 @@
 import 'package:flutter/foundation.dart';
 
-import '../data/projects.dart';
+import '../data/catalog_service.dart';
+import '../data/models.dart';
 import '../l10n/strings.dart';
 
-/// حالة جلسة الكيوسك: اللغة + المشروع والمبلغ المختارين. تُمسح كاملة عند انتهاء الجلسة.
+/// حالة جلسة الكيوسك: اللغة + البرنامج والمبلغ المختارين + مصدر الكتالوج.
+/// تُمسح كاملة عند انتهاء الجلسة.
 class DonationState extends ChangeNotifier {
+  DonationState(this.catalog);
+
+  final CatalogService catalog;
   AppLang lang = AppLang.ar;
-  Project? project;
+  Program? program;
   int amount = 0;
+
+  CatalogData get data => catalog.data;
 
   void setLang(AppLang l) {
     if (l == lang) return;
@@ -15,9 +22,12 @@ class DonationState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// لإعادة بناء الشاشات عند وصول كتالوج جديد.
+  void touch() => notifyListeners();
+
   void reset() {
     lang = AppLang.ar;
-    project = null;
+    program = null;
     amount = 0;
     notifyListeners();
   }

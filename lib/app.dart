@@ -3,26 +3,29 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'data/catalog_service.dart';
 import 'l10n/strings.dart';
 import 'screens/welcome_screen.dart';
 import 'state/donation_state.dart';
 import 'theme/theme.dart';
 
 class KioskApp extends StatefulWidget {
-  const KioskApp({
-    super.key,
-    this.idleTimeout = const Duration(seconds: 60),
-    this.warnFor = const Duration(seconds: 15),
-  });
-  final Duration idleTimeout;
-  final Duration warnFor;
+  const KioskApp({super.key, this.catalog, this.idleTimeout, this.warnFor});
+
+  /// مصدر الكتالوج (للاختبارات). الافتراضي: يُنشأ ويتصل بـ CATALOG_URL إن ضُبط.
+  final CatalogService? catalog;
+
+  /// تجاوز مهلات الخمول (للاختبارات). الافتراضي: من إعدادات لوحة التحكم.
+  final Duration? idleTimeout;
+  final Duration? warnFor;
 
   @override
   State<KioskApp> createState() => _KioskAppState();
 }
 
 class _KioskAppState extends State<KioskApp> {
-  final _state = DonationState();
+  late final CatalogService _catalog = widget.catalog ?? CatalogService();
+  late final DonationState _state = DonationState(_catalog);
   final _nav = GlobalKey<NavigatorState>();
   Timer? _idle;
   Timer? _warn;
@@ -32,6 +35,8 @@ class _KioskAppState extends State<KioskApp> {
   void initState() {
     super.initState();
     _state.addListener(() => setState(() {}));
+    _catalog.addListener(_state.touch); // وصل كتالوج جديد ← أعد بناء الشاشات
+    if (widget.catalog == null) _catalog.init();
     _resetIdle();
   }
 
@@ -39,7 +44,10 @@ class _KioskAppState extends State<KioskApp> {
   void _resetIdle() {
     _idle?.cancel();
     if (_warning) return;
-    _idle = Timer(widget.idleTimeout, _onIdle);
+    _idle = Timer(
+      widget.idleTimeout ?? Duration(seconds: _state.data.settings.idleSeconds),
+      _onIdle,
+    );
   }
 
   void _onIdle() {
@@ -51,10 +59,13 @@ class _KioskAppState extends State<KioskApp> {
       return;
     }
     _warning = true;
-    _warn = Timer(widget.warnFor, () {
-      _closeWarning();
-      _endSession();
-    });
+    _warn = Timer(
+      widget.warnFor ?? Duration(seconds: _state.data.settings.warnSeconds),
+      () {
+        _closeWarning();
+        _endSession();
+      },
+    );
     final s = S(_state.lang);
     showDialog<void>(
       context: _nav.currentContext!,
@@ -85,6 +96,7 @@ class _KioskAppState extends State<KioskApp> {
 
   void _endSession() {
     _state.reset();
+    _catalog.refresh(); // الزائر التالي يرى أحدث نسخة
     _nav.currentState?.popUntil((r) => r.isFirst);
   }
 
@@ -92,6 +104,8 @@ class _KioskAppState extends State<KioskApp> {
   void dispose() {
     _idle?.cancel();
     _warn?.cancel();
+    _catalog.removeListener(_state.touch);
+    if (widget.catalog == null) _catalog.dispose();
     super.dispose();
   }
 
