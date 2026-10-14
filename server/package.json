@@ -4,6 +4,6 @@
   "private": true,
   "description": "Hadiyah kiosk catalog server + admin panel (no dependencies)",
   "main": "server.js",
-  "scripts": { "start": "node server.js", "test": "node test/server.test.js" },
+  "scripts": { "start": "node server.js", "test": "node --test test/server.test.js test/platform.test.js" },
   "engines": { "node": ">=18" }
 }
