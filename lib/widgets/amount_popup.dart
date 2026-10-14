@@ -45,14 +45,13 @@ class AmountPopup extends StatefulWidget {
 class _AmountPopupState extends State<AmountPopup> {
   String _digits = '';
 
-  int get _max => widget.state.data.settings.maxAmount;
+  /// بلا سقف للمبلغ؛ يكفي سقف تقني للخانات كي لا يفيض الرقم.
+  static const _maxDigits = 12;
   int get _amount => int.tryParse(_digits) ?? 0;
 
   void _digit(String d) {
     final next = (_digits.isEmpty && d == '0') ? '' : _digits + d;
-    if (next.length > '$_max'.length || (int.tryParse(next) ?? 0) > _max) {
-      return;
-    }
+    if (next.length > _maxDigits) return;
     setState(() => _digits = next);
   }
 
@@ -129,23 +128,27 @@ class _AmountPopupState extends State<AmountPopup> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            _amount == 0
-                                ? (hint.isNotEmpty ? hint : s.amountLabel)
-                                : '$_amount',
-                            key: const Key('popup_amount'),
-                            style: TextStyle(
-                              fontSize: context.d(_amount == 0 ? 40 : 60),
-                              fontWeight: _amount == 0
-                                  ? FontWeight.w400
-                                  : FontWeight.w700,
-                              color: hasBg
-                                  ? (_amount == 0
-                                        ? const Color(0xCCFFFFFF)
-                                        : Colors.white)
-                                  : (_amount == 0
-                                        ? const Color(0xFFB8C4C2)
-                                        : HColors.teal),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(
+                              _amount == 0
+                                  ? (hint.isNotEmpty ? hint : s.amountLabel)
+                                  : '$_amount',
+                              key: const Key('popup_amount'),
+                              style: TextStyle(
+                                fontSize: context.d(_amount == 0 ? 40 : 60),
+                                fontWeight: _amount == 0
+                                    ? FontWeight.w400
+                                    : FontWeight.w700,
+                                color: hasBg
+                                    ? (_amount == 0
+                                          ? const Color(0xCCFFFFFF)
+                                          : Colors.white)
+                                    : (_amount == 0
+                                          ? const Color(0xFFB8C4C2)
+                                          : HColors.teal),
+                              ),
                             ),
                           ),
                         ),

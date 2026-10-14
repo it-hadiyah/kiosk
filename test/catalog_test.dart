@@ -499,6 +499,30 @@ void main() {
       expect(t.takeException(), isNull);
     });
 
+    testWidgets('free popup accepts amounts beyond the global max', (t) async {
+      await start(
+        t,
+        _data(
+          programs: [
+            _prog('z', extra: {'kind': 'free'}),
+          ],
+          home: [
+            {'type': 'program', 'id': 'z'},
+          ],
+        ),
+      );
+      await t.tap(find.byKey(const Key('program_z')));
+      await t.pumpAndSettle();
+      for (var i = 0; i < 7; i++) {
+        await t.tap(find.byKey(const Key('key_9')));
+      }
+      await t.pumpAndSettle();
+      expect(find.text('9999999'), findsOneWidget);
+      await t.tap(find.byKey(const Key('popup_donate')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('pay_amount')), findsOneWidget);
+    });
+
     testWidgets('free popup can be closed without donating', (t) async {
       await start(
         t,
