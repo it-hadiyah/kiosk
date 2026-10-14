@@ -1,15 +1,18 @@
 # كيوسك هدية للتبرع — Hadiyah Donation Kiosk
 
-تطبيق Flutter (Android) للخدمة الذاتية للتبرع. **الدفع غير مربوط حالياً** (وضع تجريبي).
+تطبيق Flutter (Android) للخدمة الذاتية للتبرع، مصمم لشاشة **1080×1920 عمودية** حسب تصميم هدية.
+**الدفع غير مربوط حالياً** — نافذة تمرير البطاقة تحاكي التقدم ثم النجاح (وضع تجريبي).
 
-- رحلة: ترحيب ← مشروع ← مبلغ ← مراجعة ← شكراً (تعود تلقائياً للرئيسية)
-- عربي RTL / English، اتجاه عمودي، ملء الشاشة
-- مهلة خمول 60 ثانية مع تنبيه ثم مسح الجلسة
-- المشاريع تجريبية في `lib/data/projects.dart`
+- الرئيسية: بانر رئيسي، الأقسام (السقيا والإطعام / القرآن الكريم / الكفارات)، الزكاة، صدقتك هدية
+- الصدقة/الزكاة: نافذة مبلغ بلوحة أرقام داخلية ← نافذة الدفع
+- صفحة القسم: اختيار مبلغ الوحدة × العدد = الإجمالي ← نافذة الدفع
+- عربي RTL / English، ملء الشاشة، مهلة خمول 60 ثانية مع تنبيه ثم مسح الجلسة
+- البيانات في `lib/data/catalog.dart` (مشاريع القرآن والكفارات مؤقتة)
+- مكان ربط الدفع لاحقاً: `lib/widgets/payment_dialog.dart` (`_startDemo`)
 
 ```
 flutter pub get
 flutter test
-flutter run            # أو: flutter build apk --release
-adb install build/app/outputs/flutter-apk/app-release.apk
+flutter build apk --release
+adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```

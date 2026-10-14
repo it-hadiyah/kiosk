@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'l10n/strings.dart';
-import 'screens/welcome_screen.dart';
+import 'screens/home_screen.dart';
 import 'state/donation_state.dart';
+import 'theme/theme.dart';
 
 class KioskApp extends StatefulWidget {
   const KioskApp({
@@ -52,10 +53,9 @@ class _KioskAppState extends State<KioskApp> {
       _closeWarning();
       _endSession();
     });
-    final ctx = _nav.currentContext!;
     final s = S(_state.arabic);
     showDialog<void>(
-      context: ctx,
+      context: _nav.currentContext!,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         title: Text(s.idleTitle, style: const TextStyle(fontSize: 32)),
@@ -110,12 +110,8 @@ class _KioskAppState extends State<KioskApp> {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        theme: ThemeData(
-          colorSchemeSeed: const Color(0xFF00695C),
-          useMaterial3: true,
-          visualDensity: VisualDensity.standard,
-        ),
-        home: WelcomeScreen(state: _state),
+        theme: buildTheme(),
+        home: HomeScreen(state: _state),
       ),
     );
   }
