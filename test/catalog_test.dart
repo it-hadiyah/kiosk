@@ -467,6 +467,32 @@ void main() {
     });
 
     testWidgets(
+      'hidden diagnostics: 5 quick taps on the corner show server status',
+      (t) async {
+        size(t);
+        final svc = CatalogService(
+          baseUrl: 'http://10.0.0.5:8080',
+          cacheDir: Directory.systemTemp.createTempSync('hd_diag_'),
+          refreshEvery: Duration.zero,
+          fetcher: (u, {etag}) async =>
+              throw const SocketException('Connection refused'),
+        );
+        await t.pumpWidget(KioskApp(catalog: svc));
+        await wait(t);
+        for (var i = 0; i < 4; i++) {
+          await t.tap(find.byKey(const Key('secret_corner')));
+        }
+        await wait(t, 200);
+        expect(find.byKey(const Key('diag_title')), findsNothing);
+        await t.tap(find.byKey(const Key('secret_corner')));
+        await wait(t, 300);
+        expect(find.byKey(const Key('diag_title')), findsOneWidget);
+        expect(find.textContaining('http://10.0.0.5:8080'), findsOneWidget);
+        expect(find.textContaining('Connection refused'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
       'titles from settings override defaults; every language falls back safely',
       (t) async {
         await start(

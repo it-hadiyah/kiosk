@@ -24,7 +24,7 @@ class CatalogService extends ChangeNotifier {
     CatalogFetcher? fetcher,
     Directory? cacheDir,
     CatalogData? initial,
-    this.refreshEvery = const Duration(minutes: 5),
+    this.refreshEvery = const Duration(minutes: 1),
   }) : baseUrl = _clean(baseUrl ?? const String.fromEnvironment('CATALOG_URL')),
        _fetcher = fetcher ?? _httpFetch,
        _cacheDir =
@@ -50,6 +50,18 @@ class CatalogService extends ChangeNotifier {
   String? etag;
   String? lastError;
   DateTime? lastSync;
+  DateTime? lastAttempt;
+  String? lastStatus;
+
+  /// نص تشخيصي يعرض حالة الاتصال بالخادم.
+  String diagnostics() => [
+    'Catalog server: ${baseUrl.isEmpty ? '(not set — bundled catalog)' : baseUrl}',
+    'Last attempt: ${lastAttempt?.toIso8601String() ?? 'never'}',
+    'Last result: ${lastStatus ?? '-'}',
+    'Last error: ${lastError ?? 'none'}',
+    'Published at: ${data.updatedAt.isEmpty ? '(bundled)' : data.updatedAt}',
+    'Programs: ${data.programs.length} · Home tiles: ${data.homeTiles.length}',
+  ].join('\n');
   Timer? _timer;
   bool _busy = false;
 
@@ -82,8 +94,10 @@ class CatalogService extends ChangeNotifier {
   Future<void> refresh() async {
     if (baseUrl.isEmpty || _busy) return;
     _busy = true;
+    lastAttempt = DateTime.now();
     try {
       final r = await _fetcher(Uri.parse('$baseUrl/api/catalog'), etag: etag);
+      lastStatus = 'HTTP ${r.status}';
       if (r.status == 304) {
         lastError = null;
       } else if (r.status == 200 && r.body != null) {
@@ -102,6 +116,7 @@ class CatalogService extends ChangeNotifier {
       lastSync = DateTime.now();
     } catch (e) {
       lastError = '$e';
+      lastStatus = 'failed';
       debugPrint('catalog refresh failed: $e');
     } finally {
       _busy = false;

@@ -24,6 +24,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     duration: const Duration(milliseconds: 1800),
   );
   bool _navigating = false;
+  int _taps = 0;
+  DateTime _tapStart = DateTime.fromMillisecondsSinceEpoch(0);
   bool _started = false;
 
   @override
@@ -32,6 +34,39 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     if (_started) return;
     _started = true;
     if (!context.reduceMotion) _pulse.repeat(reverse: true);
+    widget.state.catalog.refresh(); // أحدث نسخة عند ظهور صفحة البداية
+  }
+
+  /// 5 لمسات سريعة على الزاوية العلوية تعرض حالة الاتصال بالخادم (للفنيين).
+  void _secretTap() {
+    final now = DateTime.now();
+    if (now.difference(_tapStart) > const Duration(seconds: 4)) {
+      _taps = 0;
+      _tapStart = now;
+    }
+    if (++_taps < 5) return;
+    _taps = 0;
+    widget.state.catalog.refresh();
+    showDialog<void>(
+      context: context,
+      builder: (_) => ListenableBuilder(
+        listenable: widget.state.catalog,
+        builder: (context, _) => AlertDialog(
+          title: const Text('Status', key: Key('diag_title')),
+          content: SelectableText(
+            widget.state.catalog.diagnostics(),
+            textDirection: TextDirection.ltr,
+            style: const TextStyle(fontSize: 18, height: 1.6),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -160,6 +195,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   ),
                 ],
               ),
+            ),
+          ),
+          // منطقة مخفية للتشخيص (5 لمسات سريعة)
+          Positioned(
+            left: 0,
+            top: 0,
+            width: context.d(260),
+            height: context.d(220),
+            child: GestureDetector(
+              key: const Key('secret_corner'),
+              behavior: HitTestBehavior.translucent,
+              onTap: _secretTap,
             ),
           ),
         ],

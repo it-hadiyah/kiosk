@@ -244,8 +244,11 @@ class CatalogData {
     this.programs = const [],
     this.catalogs = const [],
     this.home = const [],
+    this.updatedAt = '',
   });
 
+  /// وقت آخر نشر من لوحة التحكم (للتشخيص).
+  final String updatedAt;
   final AppSettings settings;
   final List<Program> programs;
   final List<CatalogGroup> catalogs;
@@ -282,6 +285,7 @@ class CatalogData {
       programs: programs,
       catalogs: catalogs,
       home: home,
+      updatedAt: json['updatedAt'] is String ? json['updatedAt'] as String : '',
     );
   }
 
