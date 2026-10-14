@@ -557,6 +557,7 @@ regions.featForm = () => {
 regions.featWarn = () => {
   const F = C().featured; const inactive = F.items.filter((x) => { const o = x.type === 'catalog' ? findCat(x.id) : findProg(x.id); return o && !o.active; }).length;
   const w = [];
+  if (!F.enabled && F.items.length) w.push('الشريط متوقف حالياً — فعّل المفتاح أعلاه ليظهر للمتبرعين وفي المعاينة.');
   if (F.enabled && !F.items.length) w.push('الشريط مفعّل لكن بلا عناصر — لن يظهر للمتبرعين.');
   if (F.enabled && inactive) w.push(`${nf(inactive)} من العناصر غير مفعّلة ولن تظهر في الشريط.`);
   return w.length ? `<div class="warnbox slim"><div class="wb-h">${ic('alert')}<strong>${esc(w.join(' '))}</strong></div></div>` : '';
