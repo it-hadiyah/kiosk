@@ -16,7 +16,13 @@
   },
   "programs": [ Program ],
   "catalogs": [ Catalog ],
-  "home":     [ { "type": "program"|"catalog", "id": "...", "size": "small"|"medium"|"large" } ]
+  "home":     [ { "type": "program"|"catalog", "id": "...", "size": "small"|"medium"|"large" } ],
+  "featured": {                    // شريط «الأكثر رواجاً» أعلى صفحة المتبرع
+    "enabled": true,
+    "intervalSeconds": 5,          // مدة بقاء كل عنصر قبل التبديل (2..60)
+    "title": { "ar","fr","en","ur" },   // اختياري: نص الشارة (الافتراضي من التطبيق)
+    "items": [ { "type": "program"|"catalog", "id": "..." } ]   // حتى 10، بالترتيب
+  }
 }
 ```
 - **Program**: `id` (a-z0-9_-، فريد)، `active`، `title{ar,fr,en,ur}` (العربية إلزامية)، `image`، `imageAlign` (`center|top|bottom`)،

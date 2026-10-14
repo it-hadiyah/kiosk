@@ -150,3 +150,25 @@ test('normalize unit: ids unique, sizes defaulted, quick amounts bounded', () =>
   assert.deepEqual(catalog.catalogs[0].items, [{ programId: 'a', size: 'medium' }]);
   assert.equal(catalog.home[0].size, 'medium');
 });
+
+test('featured: normalized, bounded, references checked, survives publish', async () => {
+  const cur = (await admin('GET', '/api/admin/catalog')).json.catalog;
+  const next = structuredClone(cur);
+  const id = next.programs[0].id;
+  next.featured = {
+    enabled: true, intervalSeconds: 999, title: { ar: 'الأكثر طلباً', en: 'Top' },
+    items: [{ type: 'program', id }, { type: 'program', id }, { type: 'program', id: 'ghost' }, { type: 'catalog', id: 'nope' }, ...Array.from({ length: 12 }, () => ({ type: 'program', id }))],
+  };
+  const r = await admin('PUT', '/api/admin/catalog', { catalog: next });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.catalog.featured.intervalSeconds, 60);
+  assert.deepEqual(r.json.catalog.featured.items, [{ type: 'program', id }]); // مكرر/غير موجود أُزيل
+  assert.equal(r.json.catalog.featured.title.ar, 'الأكثر طلباً');
+  assert.equal((await admin('POST', '/api/admin/publish')).status, 200);
+  const live = (await api('GET', '/api/catalog')).json;
+  assert.equal(live.featured.enabled, true);
+  assert.equal(live.featured.items.length, 1);
+  // بلا إعداد = معطّل
+  const bare = normalize({ programs: [{ id: 'a', title: { ar: 'أ' } }] });
+  assert.equal(bare.catalog.featured.enabled, false);
+});

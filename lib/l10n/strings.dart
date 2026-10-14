@@ -33,6 +33,13 @@ class S {
   String get donateNow =>
       _t('تبرع الآن', 'Faire un don', 'Donate now', 'ابھی عطیہ دیں');
 
+  String get popular => _t(
+    'الأكثر رواجاً',
+    'Les plus populaires',
+    'Most popular',
+    'سب سے زیادہ مقبول',
+  );
+
   // 1 — المشروع
   String get headline => _t(
     'عطاؤك يصنع أثراً',

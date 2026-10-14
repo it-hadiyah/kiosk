@@ -245,10 +245,12 @@ class CatalogData {
     this.catalogs = const [],
     this.home = const [],
     this.updatedAt = '',
+    this.featured = const FeaturedConfig(),
   });
 
   /// وقت آخر نشر من لوحة التحكم (للتشخيص).
   final String updatedAt;
+  final FeaturedConfig featured;
   final AppSettings settings;
   final List<Program> programs;
   final List<CatalogGroup> catalogs;
@@ -286,6 +288,7 @@ class CatalogData {
       catalogs: catalogs,
       home: home,
       updatedAt: json['updatedAt'] is String ? json['updatedAt'] as String : '',
+      featured: FeaturedConfig.fromJson(json['featured']),
     );
   }
 
@@ -313,6 +316,11 @@ class CatalogData {
   /// عناصر الصفحة الرئيسية الظاهرة فعلاً (النشطة والموجودة، والكتالوج غير الفارغ).
   List<Tile> get homeTiles => [for (final h in home) ?_homeTile(h)];
 
+  /// عناصر «الأكثر رواجاً» الظاهرة فعلاً (فارغة إن كان الشريط معطّلاً).
+  List<Tile> get featuredTiles => !featured.enabled
+      ? const []
+      : [for (final h in featured.items) ?_homeTile(h)];
+
   Tile? _homeTile(HomeEntry h) {
     if (h.isCatalog) {
       final c = catalog(h.id);
@@ -321,6 +329,39 @@ class CatalogData {
     }
     final p = program(h.id);
     return (p == null || !p.active) ? null : Tile.program(p, h.size);
+  }
+}
+
+/// شريط «الأكثر رواجاً» أعلى صفحة المتبرع: عناصر محددة تُعرض واحداً واحداً بالتناوب.
+class FeaturedConfig {
+  const FeaturedConfig({
+    this.enabled = false,
+    this.intervalSeconds = 5,
+    this.title = Localized.empty,
+    this.items = const [],
+  });
+  final bool enabled;
+  final int intervalSeconds;
+  final Localized title;
+  final List<HomeEntry> items;
+
+  static FeaturedConfig fromJson(Object? j) {
+    if (j is! Map) return const FeaturedConfig();
+    return FeaturedConfig(
+      enabled: j['enabled'] == true,
+      intervalSeconds: _int(j['intervalSeconds'], 5, min: 2, max: 60),
+      title: Localized.from(j['title']),
+      items: [
+        if (j['items'] is List)
+          for (final h in j['items'] as List)
+            if (h is Map && h['id'] is String)
+              HomeEntry(
+                h['type'] == 'catalog',
+                h['id'] as String,
+                TileSize.large,
+              ),
+      ],
+    );
   }
 }
 

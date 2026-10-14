@@ -163,6 +163,32 @@ async function main() {
     await page.click('[data-act=pv-lang][data-v=ar]');
     // قيد تحذير "مخفي في كل مكان"
     ok(await page.$('.warnbox .chip-act') !== null, '"hidden everywhere" warning chips shown');
+    /* ---------- الأكثر رواجاً ---------- */
+    console.log('== featured');
+    ok((await page.$('.pv-feat')) === null, 'featured hidden in preview while disabled');
+    await page.check('[data-ctx=feat][data-f=enabled]');
+    ok((await page.textContent('[data-region=featWarn]')).includes('بلا عناصر'), 'warning when enabled but empty');
+    for (const id of ['program:water', 'program:iftar']) { await page.selectOption('#featAdd', id); await page.click('[data-act=feat-add]'); }
+    ok((await page.$$('[data-dnd-list=feat] .row')).length === 2, 'two featured items added');
+    await page.click('[data-dnd-list=feat] [data-act=move][data-i="1"][data-d="-1"]');
+    eq(await page.$$eval('[data-dnd-list=feat] .row', (r) => r.map((x) => x.dataset.key)), ['program:iftar', 'program:water'], 'featured reorder via buttons');
+    await page.fill('[data-ctx=feat][data-f=intervalSeconds]', '1');
+    ok((await page.textContent('[data-err=intervalSeconds]')).length > 0, 'inline error for interval 1');
+    await page.fill('[data-ctx=feat][data-f=intervalSeconds]', '7');
+    await page.fill('[data-ctx=feat][data-f="title.ar"]', 'الأكثر طلباً');
+    ok((await page.textContent('.pv-fbadge')).includes('الأكثر طلباً'), 'preview badge uses custom title');
+    ok((await page.textContent('.pv-ftxt h4')).includes('إفطار'), 'preview shows first featured item');
+    eq(await page.$$eval('.pv-dots button', (b) => b.length), 2, 'two dots');
+    await page.click('.pv-dots button >> nth=1');
+    ok((await page.textContent('.pv-ftxt h4')).includes('سقيا'), 'dot click cycles to 2nd slide');
+    await page.click('[data-act=feat-step][data-d="1"]');
+    ok((await page.textContent('.pv-ftxt h4')).includes('إفطار'), 'next button wraps to first slide');
+    await page.click('[data-act=pv-lang][data-v=en]');
+    ok((await page.textContent('.pv-fbadge')).trim() === 'Most popular', 'badge falls to default text in English');
+    await page.click('[data-act=pv-lang][data-v=ar]');
+    await saved();
+    await shot('06-home-featured-desktop');
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(200); await shot('06-home-featured-phone'); await page.setViewportSize({ width: 1440, height: 900 });
     await saved();
     await shot('01-home-desktop');
 
@@ -217,6 +243,8 @@ async function main() {
     ok(live.home[0].type === 'catalog' && live.home[0].id === 'winter-campaign' && live.home[0].size === 'large', 'catalog first on home, large');
     ok(live.home.length === 6, 'home has 6 entries');
     ok(live.settings.idleSeconds === 90 && live.settings.warnSeconds === 20 && live.settings.quickAmounts.includes(25) && live.settings.homeTitle.en === 'Give with joy' && /\.jpg$/.test(live.settings.welcomeBackground), 'published settings reflect edits');
+    ok(live.featured && live.featured.enabled === true && live.featured.intervalSeconds === 7 && live.featured.title.ar === 'الأكثر طلباً', 'published featured: enabled, interval 7, badge');
+    eq(live.featured.items, [{ type: 'program', id: 'iftar' }, { type: 'program', id: 'water' }], 'published featured items in order');
     ok((await page.$$('[data-region=history] .hist')).length >= 1, 'backup history listed after publish');
     await shot('05-publish-desktop-after');
 
@@ -290,7 +318,10 @@ async function main() {
     await tab('home');
     const hadQuran = await page.evaluate(() => C().home.some((h) => h.id === 'quran'));
     await tab('programs'); await page.click('.pcard[data-id=quran] [data-act=edit-prog] >> nth=-1');
+    await page.check('[data-feat-place]');
+    ok(await page.evaluate(() => C().featured.items.some((x) => x.id === 'quran')), 'program editor checkbox adds to featured');
     await page.click('[data-act=del]'); await confirmYes(); await page.waitForFunction(() => !C().programs.some((p) => p.id === 'quran') && !state.dirty && !state.saving);
+    ok(await page.evaluate(() => !C().featured.items.some((x) => x.id === 'quran')), 'deleting a program removes it from featured.items');
     ok(await page.evaluate(() => !C().home.some((h) => h.id === 'quran') && !C().catalogs.some((c) => c.items.some((i) => i.programId === 'quran'))), `deleting program removes placements (was on home: ${hadQuran})`);
 
     /* ---------- لقطات الهاتف + الوضع الداكن ---------- */

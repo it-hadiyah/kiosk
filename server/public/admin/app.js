@@ -46,6 +46,7 @@ const ICONS = {
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
   alert: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
   image: 'M3 5h18v14H3zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M21 15l-5-5L5 19',
+  flame: 'M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-4-1-6 1-10z',
   clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
 };
 const ic = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS[n]}"/></svg>`;
@@ -140,8 +141,16 @@ function getPath(o, path) { return path.split('.').reduce((a, k) => (a == null ?
 function setPath(o, path, v) { const ks = path.split('.'); const last = ks.pop(); const t = ks.reduce((a, k) => a[k], o); t[last] = v; }
 
 /* الكيان الذي يعدّله المحرّر / الإعدادات حسب السياق */
+/* يضمن وجود featured بقيم افتراضية (متوافق مع خوادم/بيانات تجريبية بلا هذا الحقل) */
+function normClient(c) {
+  const f = (c.featured && typeof c.featured === 'object') ? c.featured : {};
+  c.featured = { enabled: f.enabled === true, intervalSeconds: f.intervalSeconds === '' ? '' : (isNum(f.intervalSeconds) ? f.intervalSeconds : 5), title: Object.assign(blankLoc(), f.title), items: Array.isArray(f.items) ? f.items : [] };
+  return c;
+}
+const featIndex = (type, id) => C().featured.items.findIndex((x) => x.type === type && x.id === id);
 function ctxObj(ctx) {
   if (ctx === 'set') return C().settings;
+  if (ctx === 'feat') return C().featured;
   const e = ui.edit; if (!e) return null;
   if (ctx === 'prog' && e.type === 'prog') return e.creating ? e.obj : findProg(e.id);
   if (ctx === 'cat' && e.type === 'cat') return e.creating ? e.obj : findCat(e.id);
@@ -182,6 +191,12 @@ function settingsErrors(s) {
   else if (isNum(s.maxAmount) && s.quickAmounts.some((n) => n > s.maxAmount)) e.quickAmounts = 'بعض المبالغ السريعة أكبر من أقصى مبلغ';
   return e;
 }
+function featErrors(f) {
+  const e = {}; const v = f.intervalSeconds;
+  if (!(isNum(v) && v >= 2 && v <= 60)) e.intervalSeconds = 'مدة التبديل: قيمة بين 2 و 60 ثانية';
+  if (f.items.length > 10) e.items = 'الحد الأقصى 10 عناصر';
+  return e;
+}
 /* قائمة أخطاء شاملة تمنع الحفظ */
 function validateCatalog(c) {
   const out = [];
@@ -192,6 +207,7 @@ function validateCatalog(c) {
     Object.values(progErrors(p, c.settings, others)).forEach((m) => out.push({ msg: `البرنامج «${tt(p)}» — ${m}` }));
     seen.add(p.id);
   });
+  const fe = featErrors(c.featured); Object.values(fe).forEach((m) => out.push({ msg: 'الأكثر رواجاً — ' + m }));
   c.catalogs.forEach((k) => {
     const others = c.catalogs.filter((x) => x !== k).map((x) => x.id);
     Object.values(catErrors(k, others)).forEach((m) => out.push({ msg: `الكتالوج «${tt(k)}» — ${m}` }));
@@ -201,6 +217,7 @@ function validateCatalog(c) {
 /* حمولة الإرسال: تحويل الحقول الفارغة إلى القيم الافتراضية */
 function toPayload() {
   const c = clone(C());
+  c.featured.items = c.featured.items.filter((x) => (x.type === 'catalog' ? c.catalogs : c.programs).some((o) => o.id === x.id));
   c.programs.forEach((p) => {
     p.price = p.price === '' ? 0 : p.price;
     p.minAmount = p.minAmount === '' ? 1 : p.minAmount;
@@ -235,7 +252,7 @@ async function flushSave() {
     let ok = false;
     try {
       const res = await backend.save(toPayload());
-      if (rev === state.rev) { state.catalog = res.catalog; state.dirty = false; }
+      if (rev === state.rev) { state.catalog = normClient(res.catalog); state.dirty = false; }
       state.hasUnpublished = res.hasUnpublished; state.warnings = res.warnings || [];
       state.failed = false; hideErrors(); ok = true;
       setSave(state.dirty ? 'pending' : 'saved');
@@ -350,11 +367,26 @@ function phone(inner, lang) {
   const L = LANGS.find((l) => l.k === lang);
   return `<div class="phone" dir="${L.dir}" lang="${lang}"><div class="pv-screen">${inner}</div></div>`;
 }
+const FEAT_DEF = { ar: ['الأكثر رواجاً', 'تبرع الآن'], fr: ['Les plus populaires', 'Donner'], en: ['Most popular', 'Donate now'], ur: ['سب سے مقبول', 'عطیہ کریں'] };
+function featItems() {
+  return C().featured.items.map((x) => ({ type: x.type, obj: x.type === 'catalog' ? findCat(x.id) : findProg(x.id) })).filter((x) => x.obj && x.obj.active);
+}
+function featPreview(lang) {
+  const F = C().featured; const it = featItems(); if (!F.enabled || !it.length) return '';
+  const i = ((ui.featIdx || 0) % it.length + it.length) % it.length; const cur = it[i];
+  const badgeTxt = F.title[lang] || (F.title.ar && lang === 'ar' ? F.title.ar : FEAT_DEF[lang][0]);
+  return `<div class="pv-feat" aria-label="الأكثر رواجاً"><div class="pv-slide" key="${i}">${imgTag(cur.obj.image, cur.obj.imageAlign)}
+    <span class="pv-fbadge">${ic('flame')}${esc(badgeTxt)}</span>
+    <div class="pv-ftxt"><h4>${esc(tt(cur.obj, lang))}</h4><span class="pv-pill">${FEAT_DEF[lang][1]}</span></div>
+    <button type="button" class="pv-nav prev" data-act="feat-step" data-d="-1" aria-label="السابق">${ic('down')}</button>
+    <button type="button" class="pv-nav next" data-act="feat-step" data-d="1" aria-label="التالي">${ic('up')}</button></div>
+    <div class="pv-dots" role="group" aria-label="شرائح الأكثر رواجاً">${it.map((_, k) => `<button type="button" data-act="feat-go" data-i="${k}" aria-label="الشريحة ${k + 1}" ${k === i ? 'aria-current="true"' : ''}></button>`).join('')}</div></div>`;
+}
 function homePreview() {
   const lang = ui.pvLang, S = C().settings;
   const title = S.homeTitle[lang] || S.homeTitle.ar, sub = S.homeSubtitle[lang] || S.homeSubtitle.ar;
   const head = `<div class="pv-head"><h4>${title ? esc(title) : '<span class="muted">(العنوان الافتراضي للتطبيق)</span>'}</h4>${sub ? `<p>${esc(sub)}</p>` : ''}</div>`;
-  return `<div class="pv-box"><div class="pv-top"><strong>معاينة صفحة المتبرع</strong>${langSwitch()}</div>${phone(head + `<div class="pv-grid" id="pvHomeGrid">${rowsHtml(homeTiles(), lang)}</div>`, lang)}
+  return `<div class="pv-box"><div class="pv-top"><strong>معاينة صفحة المتبرع</strong>${langSwitch()}</div>${phone(featPreview(lang) + head + `<div class="pv-grid" id="pvHomeGrid">${rowsHtml(homeTiles(), lang)}</div>`, lang)}
     <p class="hint center">المعاينة تقريبية: كل بطاقة تأخذ ثلث/نصف/كامل عرض الصفحة وتُرصّ كما في التطبيق.</p></div>`;
 }
 function catPreview(c) {
@@ -470,7 +502,8 @@ const regions = {};   // اسم المنطقة -> دالة ترسم HTML
 /* ---- أ) الصفحة الرئيسية ---- */
 function viewHome() {
   return `<div class="page-h"><div><h2>الصفحة الرئيسية</h2><p class="muted">رتّب ما يراه المتبرع أولاً: برامج مباشرة أو كتالوجات، واختر حجم كل بطاقة.</p></div></div>
-  <div class="split"><div class="col-list"><div data-region="homeList"></div></div><div class="col-pv sticky" data-region="homePv"></div></div>`;
+  <div class="split"><div class="col-list"><section class="card featcard"><h3>${ic('flame')}الأكثر رواجاً (شريط التبديل أعلى الصفحة)</h3>
+    <div data-region="featForm"></div><div data-region="featWarn"></div><div data-region="featList"></div></section><div data-region="homeList"></div></div><div class="col-pv sticky" data-region="homePv"></div></div>`;
 }
 function entryInfo(list, entry) {
   if (list === 'items') { const p = findProg(entry.programId); return { type: 'program', obj: p, key: 'program:' + entry.programId }; }
@@ -485,11 +518,11 @@ function listRows(list, arr) {
       <span class="grip" aria-hidden="true">${ic('grip')}</span>
       <div class="thumb">${imgTag(o.image, o.imageAlign)}</div>
       <div class="row-t"><strong>${esc(tt(o))}</strong><div class="row-sub">${sub}${o.active ? '' : badge('غير مفعّل', 'off')}</div></div>
-      ${sizeSeg(`data-act="size" data-list="${list}" data-i="${i}"`, entry.size)}
+      ${list === 'feat' ? '' : sizeSeg(`data-act="size" data-list="${list}" data-i="${i}"`, entry.size)}
       <div class="row-btns">
         <button type="button" class="icon-btn" data-act="move" data-list="${list}" data-i="${i}" data-d="-1" aria-label="نقل «${esc(tt(o))}» للأعلى" ${i === 0 ? 'disabled' : ''}>${ic('up')}</button>
         <button type="button" class="icon-btn" data-act="move" data-list="${list}" data-i="${i}" data-d="1" aria-label="نقل «${esc(tt(o))}» للأسفل" ${i === arr.length - 1 ? 'disabled' : ''}>${ic('down')}</button>
-        <button type="button" class="icon-btn danger" data-act="remove-entry" data-list="${list}" data-i="${i}" aria-label="إزالة «${esc(tt(o))}» من ${list === 'home' ? 'الرئيسية' : 'الكتالوج'}">${ic('x')}</button>
+        <button type="button" class="icon-btn danger" data-act="remove-entry" data-list="${list}" data-i="${i}" aria-label="إزالة «${esc(tt(o))}» من ${list === 'home' ? 'الرئيسية' : list === 'feat' ? 'الأكثر رواجاً' : 'الكتالوج'}">${ic('x')}</button>
       </div></li>`;
   }).join('');
 }
@@ -515,6 +548,32 @@ regions.homeList = () => {
     <p class="hint">اسحب البطاقة من المقبض لإعادة الترتيب، أو استخدم أزرار الأسهم.</p></div>`;
 };
 regions.homePv = () => homePreview();
+regions.featForm = () => {
+  const F = C().featured;
+  return `${toggle('data-ctx="feat" data-f="enabled"', F.enabled, 'إظهار شريط «الأكثر رواجاً» للمتبرعين')}
+    ${numField('feat', 'intervalSeconds', 'مدة التبديل (ثانية)', F.intervalSeconds, { min: 2, max: 60, hint: 'كل كم ثانية يتبدّل العنصر' })}
+    ${locFields('feat', 'title', 'نص الشارة (اختياري)')}<p class="hint">إذا تركته فارغاً يُستخدم النص الافتراضي في التطبيق.</p>`;
+};
+regions.featWarn = () => {
+  const F = C().featured; const inactive = F.items.filter((x) => { const o = x.type === 'catalog' ? findCat(x.id) : findProg(x.id); return o && !o.active; }).length;
+  const w = [];
+  if (F.enabled && !F.items.length) w.push('الشريط مفعّل لكن بلا عناصر — لن يظهر للمتبرعين.');
+  if (F.enabled && inactive) w.push(`${nf(inactive)} من العناصر غير مفعّلة ولن تظهر في الشريط.`);
+  return w.length ? `<div class="warnbox slim"><div class="wb-h">${ic('alert')}<strong>${esc(w.join(' '))}</strong></div></div>` : '';
+};
+regions.featList = () => {
+  const F = C().featured; const full = F.items.length >= 10;
+  const onF = new Set(F.items.map((x) => x.type + ':' + x.id));
+  const progs = C().programs.filter((p) => !onF.has('program:' + p.id)), cats = C().catalogs.filter((c) => !onF.has('catalog:' + c.id));
+  const can = !full && progs.length + cats.length > 0;
+  return `<h4 class="subh">العناصر المختارة <span class="count">${F.items.length}/10</span></h4>
+    ${F.items.length ? `<ul class="rows" data-dnd-list="feat">${listRows('feat', F.items)}</ul>` : `<div class="empty">${ic('flame')}<strong>لم يُختر أي عنصر</strong><p>أضف برامج أو كتالوجات لتظهر في الشريط.</p></div>`}
+    <div class="addbar"><label for="featAdd" class="sr">إضافة إلى الأكثر رواجاً</label><select id="featAdd" ${can ? '' : 'disabled'}>
+      ${can ? '' : `<option>${full ? 'بلغت الحد الأقصى (10)' : 'كل العناصر مضافة'}</option>`}
+      ${progs.length && !full ? `<optgroup label="برامج">${progs.map((p) => `<option value="program:${esc(p.id)}">${esc(tt(p))}${p.active ? '' : ' (غير مفعّل)'}</option>`).join('')}</optgroup>` : ''}
+      ${cats.length && !full ? `<optgroup label="كتالوجات">${cats.map((c) => `<option value="catalog:${esc(c.id)}">${esc(tt(c))}${c.active ? '' : ' (غير مفعّل)'}</option>`).join('')}</optgroup>` : ''}
+    </select><button class="btn primary" type="button" data-act="feat-add" ${can ? '' : 'disabled'}>${ic('plus')}إضافة</button></div>`;
+};
 
 /* ---- ب) البرامج ---- */
 function viewPrograms() {
@@ -647,6 +706,17 @@ function diffCatalogs(a, b) {
   a.home.forEach((h) => { if (!bh.has(hk(h))) hg.items.push({ k: 'del', t: `إزالة ${hname(h, a)} من الرئيسية` }); });
   const common = (arr, other) => arr.map(hk).filter((k) => other.has(k));
   if (!same(common(a.home, bh), common(b.home, ah))) hg.items.push({ k: 'chg', t: 'تغيير ترتيب البطاقات في الرئيسية' });
+  /* الأكثر رواجاً */
+  const fg = { title: 'الأكثر رواجاً', items: [] }; G.push(fg);
+  const fa = a.featured, fb = b.featured;
+  if (fa.enabled !== fb.enabled) fg.items.push({ k: 'chg', t: fb.enabled ? 'تفعيل شريط «الأكثر رواجاً»' : 'إيقاف شريط «الأكثر رواجاً»' });
+  if (fa.intervalSeconds !== fb.intervalSeconds) fg.items.push({ k: 'chg', t: `تغيير مدة التبديل: ${fa.intervalSeconds} ← ${fb.intervalSeconds} ثانية` });
+  if (!same(fa.title, fb.title)) fg.items.push({ k: 'chg', t: 'تغيير نص الشارة' });
+  const fk = (x) => x.type + ':' + x.id, fn = (x, cat) => nm((x.type === 'program' ? cat.programs : cat.catalogs).find((o) => o.id === x.id) || { id: x.id });
+  const fas = new Set(fa.items.map(fk)), fbs = new Set(fb.items.map(fk));
+  fb.items.forEach((x) => { if (!fas.has(fk(x))) fg.items.push({ k: 'add', t: `إضافة ${fn(x, b)} إلى الأكثر رواجاً` }); });
+  fa.items.forEach((x) => { if (!fbs.has(fk(x))) fg.items.push({ k: 'del', t: `إزالة ${fn(x, a)} من الأكثر رواجاً` }); });
+  if (!same(fa.items.map(fk).filter((k) => fbs.has(k)), fb.items.map(fk).filter((k) => fas.has(k)))) fg.items.push({ k: 'chg', t: 'تغيير ترتيب عناصر الأكثر رواجاً' });
   /* الإعدادات */
   const sg = { title: 'الإعدادات', items: [] }; G.push(sg);
   const SL = { idleSeconds: 'مهلة الخمول', warnSeconds: 'مهلة التنبيه', maxAmount: 'أقصى مبلغ', quickAmounts: 'المبالغ السريعة', welcomeBackground: 'صورة الترحيب', homeTitle: 'عنوان الصفحة', homeSubtitle: 'العنوان الفرعي' };
@@ -686,12 +756,22 @@ function placementRow(key, label, sub) {
   return `<div class="pl-row ${size ? 'on' : ''}"><label class="check"><input type="checkbox" data-place="${esc(key)}" ${size ? 'checked' : ''}><span>${esc(label)}${sub ? ` <small class="muted">${esc(sub)}</small>` : ''}</span></label>
     ${sizeSeg(`data-act="pl-size" data-key="${esc(key)}"`, size || 'medium', !size)}</div>`;
 }
+function featGet() { const e = ui.edit; return e.creating ? !!e.featOn : featIndex(e.type === 'prog' ? 'program' : 'catalog', e.id) >= 0; }
+function featSet(on) {
+  const e = ui.edit; if (e.creating) { e.featOn = on; return true; }
+  const t = e.type === 'prog' ? 'program' : 'catalog'; const i = featIndex(t, e.id);
+  if (on && i < 0) { if (C().featured.items.length >= 10) return false; C().featured.items.push({ type: t, id: e.id }); } else if (!on && i >= 0) C().featured.items.splice(i, 1);
+  markDirty(); return true;
+}
+function featRow() {
+  return `<div class="pl-row ${featGet() ? 'on' : ''}"><label class="check"><input type="checkbox" data-feat-place ${featGet() ? 'checked' : ''}><span>شريط «الأكثر رواجاً» <small class="muted">(أعلى صفحة المتبرع)</small></span></label></div>`;
+}
 function placementsHtml() {
   const e = ui.edit; const isProg = e.type === 'prog';
   const homeRow = placementRow('home', 'الصفحة الرئيسية');
   const cats = isProg ? C().catalogs.map((c) => placementRow(c.id, 'كتالوج: ' + tt(c), c.active ? '' : '(غير مفعّل)')).join('') : '';
   return `<section class="card"><h3>أين يظهر؟</h3><p class="hint">${isProg ? 'ضع البرنامج في الصفحة الرئيسية مباشرة و/أو داخل كتالوج، واختر حجمه في كل مكان.' : 'ضع الكتالوج في الصفحة الرئيسية واختر حجم بطاقته.'}</p>
-    <div class="pl">${homeRow}${cats}${isProg && !C().catalogs.length ? '<p class="hint">لا توجد كتالوجات بعد — يمكنك إنشاء كتالوج من تبويب «الكتالوجات».</p>' : ''}</div></section>`;
+    <div class="pl">${homeRow}${featRow()}${cats}${isProg && !C().catalogs.length ? '<p class="hint">لا توجد كتالوجات بعد — يمكنك إنشاء كتالوج من تبويب «الكتالوجات».</p>' : ''}</div></section>`;
 }
 
 function programEditorHtml() {
@@ -807,6 +887,10 @@ function refreshRegions() {
   });
   updateChrome();
 }
+function validateFeatUI() {
+  const e = featErrors(C().featured); const el = $('#view [data-ctx="feat"][data-f="intervalSeconds"]'); if (!el) return;
+  const m = $('#view [data-err="intervalSeconds"]'); if (m) m.textContent = e.intervalSeconds || ''; el.toggleAttribute('aria-invalid', !!e.intervalSeconds);
+}
 function validateSettingsUI() {
   const e = settingsErrors(C().settings);
   $$('#view [data-ctx="set"][data-f]').forEach((inp) => { const k = inp.dataset.f; const el = $(`#view [data-err="${k}"]`); if (el) { el.textContent = e[k] || ''; inp.toggleAttribute('aria-invalid', !!e[k]); } });
@@ -816,7 +900,7 @@ function validateSettingsUI() {
 /* =====================================================================
    12) الإجراءات (أحداث مفوَّضة)
    ===================================================================== */
-function listArr(list) { return list === 'home' ? C().home : editing().items; }
+function listArr(list) { return list === 'home' ? C().home : list === 'feat' ? C().featured.items : editing().items; }
 function afterListChange() { if (!(ui.edit && ui.edit.creating && ui.edit.type === 'cat')) markDirty(); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; }
 function moveItem(list, from, to) {
   const a = listArr(list); if (to < 0 || to >= a.length || from === to) return;
@@ -846,6 +930,12 @@ const actions = {
     C().home.push({ type: t, id, size: 'medium' }); markDirty(); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false;
   },
   'home-add-prog'(el) { C().home.push({ type: 'program', id: el.dataset.id, size: 'medium' }); markDirty(); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; },
+  'feat-add'() {
+    const v = $('#featAdd').value; if (!v || !v.includes(':') || C().featured.items.length >= 10) return; const [t, id] = v.split(':');
+    C().featured.items.push({ type: t, id }); afterListChange();
+  },
+  'feat-step'(el) { ui.featIdx = (ui.featIdx || 0) + (+el.dataset.d); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; },
+  'feat-go'(el) { ui.featIdx = +el.dataset.i; ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; refocus(`[data-act="feat-go"][data-i="${el.dataset.i}"]`); },
   'item-add'() {
     const id = $('#itemAdd').value; const c = editing(); if (!id || !c) return;
     c.items.push({ programId: id, size: 'medium' }); afterListChange();
@@ -878,7 +968,7 @@ const actions = {
     const errs2 = validateEditorUI(); if (Object.keys(errs2).length) { const f = $('#drawerBody [aria-invalid]'); if (f) f.focus(); return; }
     const o = e.obj; (e.type === 'prog' ? C().programs : C().catalogs).push(o);
     e.creating = false; e.id = o.id; e.obj = null;
-    Object.entries(e.pl).forEach(([k, s]) => plSet(k, s));
+    Object.entries(e.pl).forEach(([k, s]) => plSet(k, s)); if (e.featOn) featSet(true);
     markDirty(); toast(e.type === 'prog' ? 'تم إنشاء البرنامج ✓' : 'تم إنشاء الكتالوج ✓');
     renderDrawer(false); refreshRegions();
   },
@@ -893,8 +983,8 @@ const actions = {
     const msg = isProg ? `حذف البرنامج «${tt(o)}»؟ سيُزال أيضاً من الصفحة الرئيسية ومن كل الكتالوجات.` : `حذف الكتالوج «${tt(o)}»؟ سيُزال من الصفحة الرئيسية (البرامج نفسها تبقى).`;
     if (!(await confirmDlg(msg, 'حذف', true))) return;
     const id = e.id;
-    if (isProg) { C().programs = C().programs.filter((p) => p.id !== id); C().home = C().home.filter((h) => !(h.type === 'program' && h.id === id)); C().catalogs.forEach((c) => { c.items = c.items.filter((i) => i.programId !== id); }); }
-    else { C().catalogs = C().catalogs.filter((c) => c.id !== id); C().home = C().home.filter((h) => !(h.type === 'catalog' && h.id === id)); }
+    if (isProg) { C().programs = C().programs.filter((p) => p.id !== id); C().home = C().home.filter((h) => !(h.type === 'program' && h.id === id)); C().catalogs.forEach((c) => { c.items = c.items.filter((i) => i.programId !== id); }); C().featured.items = C().featured.items.filter((x) => !(x.type === 'program' && x.id === id)); }
+    else { C().catalogs = C().catalogs.filter((c) => c.id !== id); C().home = C().home.filter((h) => !(h.type === 'catalog' && h.id === id)); C().featured.items = C().featured.items.filter((x) => !(x.type === 'catalog' && x.id === id)); }
     markDirty(); await closeEditor(true); toast('تم الحذف');
   },
   'dismiss-err'() { hideErrors(); },
@@ -946,7 +1036,7 @@ function onField(el, ev) {
     const sig = type === 'radio' ? `[data-f="${f}"][value="${v}"]` : `[data-f="${f}"]`;
     renderDrawer(false); const nf2 = $('#drawerBody ' + sig); if (nf2) nf2.focus(); return;
   }
-  if (ctx === 'set') validateSettingsUI(); else validateEditorUI();
+  if (ctx === 'set') validateSettingsUI(); else if (ctx === 'feat') validateFeatUI(); else validateEditorUI();
   if (type === 'checkbox' && f === 'active') { /* مفتاح التفعيل داخل المحرر */ }
   if (ctx === 'prog' || ctx === 'cat') { if (f.startsWith('title.ar')) { const t = $('#drawerTitle'); if (!ui.edit.creating) t.textContent = (ctx === 'prog' ? 'تعديل البرنامج: ' : 'تعديل الكتالوج: ') + tt(o); } }
   refreshRegions();
@@ -955,7 +1045,7 @@ function onField(el, ev) {
 /* ---- تحميل بيانات النشر ---- */
 async function loadPublishData() {
   ui.hist = null; ui.histErr = '';
-  try { ui.live = await backend.fetchLive(); } catch (e) { ui.live = null; ui.histErr = 'تعذّر قراءة النسخة المنشورة للمقارنة'; }
+  try { ui.live = normClient(await backend.fetchLive()); } catch (e) { ui.live = null; ui.histErr = 'تعذّر قراءة النسخة المنشورة للمقارنة'; }
   refreshRegions();
   try { ui.hist = await backend.history(); } catch (e) { ui.hist = []; }
   refreshRegions();
@@ -983,8 +1073,8 @@ async function doRestore(id) {
   ui.restoreBusy = true; refreshRegions();
   try {
     await settleSaves();
-    const r = await backend.restore(id); state.catalog = r.catalog; state.dirty = false;
-    const l = await backend.load(); state.catalog = l.catalog; state.hasUnpublished = l.hasUnpublished;
+    const r = await backend.restore(id); state.catalog = normClient(r.catalog); state.dirty = false;
+    const l = await backend.load(); state.catalog = normClient(l.catalog); state.hasUnpublished = l.hasUnpublished;
     hideErrors(); setSave('saved'); toast('تم استرجاع النسخة إلى المسودة ✓');
   } catch (e) { showErrors([e.message || 'تعذّر الاسترجاع'], 'تعذّر الاسترجاع'); }
   ui.restoreBusy = false; ui.forceRegions = true; refreshRegions(); ui.forceRegions = false;
@@ -1006,7 +1096,7 @@ async function doImport(file) {
     return showErrors(['الملف لا يشبه ملف كتالوج هدية (يلزم: settings و programs و catalogs و home)'], 'تعذّر الاستيراد');
   }
   if (!(await confirmDlg('سيستبدل هذا الملف المسودة الحالية بالكامل. متابعة؟', 'استيراد', true))) return;
-  const prev = state.catalog; state.catalog = data;
+  const prev = state.catalog; state.catalog = normClient(data);
   state.catalog.settings.homeTitle = Object.assign(blankLoc(), data.settings.homeTitle); state.catalog.settings.homeSubtitle = Object.assign(blankLoc(), data.settings.homeSubtitle);
   state.catalog.settings.quickAmounts = Array.isArray(data.settings.quickAmounts) ? data.settings.quickAmounts : [10, 50, 100, 200];
   state.catalog.programs.forEach((p) => { p.title = Object.assign(blankLoc(), p.title); p.presets = p.presets || []; });
@@ -1034,6 +1124,10 @@ document.addEventListener('change', (ev) => {
   const el = ev.target;
   if (el.matches('[data-act="toggle-active"]')) return actions['toggle-active'](el);
   if (el.matches('[data-ctx][data-f]')) return onField(el, ev);
+  if (el.matches('[data-feat-place]')) {
+    if (!featSet(el.checked)) { el.checked = false; toast('الحد الأقصى 10 عناصر في الأكثر رواجاً', 'warn'); }
+    el.closest('.pl-row').classList.toggle('on', el.checked); refreshRegions(); return;
+  }
   if (el.matches('[data-place]')) {
     const key = el.dataset.place; plSet(key, el.checked ? 'medium' : null);
     const row = el.closest('.pl-row'); row.classList.toggle('on', el.checked);
@@ -1100,7 +1194,7 @@ $('#loginForm').addEventListener('submit', async (ev) => {
 async function boot() {
   try {
     const d = await backend.load();
-    state.catalog = d.catalog; state.hasUnpublished = d.hasUnpublished; state.dirty = false;
+    state.catalog = normClient(d.catalog); state.hasUnpublished = d.hasUnpublished; state.dirty = false;
     const S = C().settings; S.homeTitle = Object.assign(blankLoc(), S.homeTitle); S.homeSubtitle = Object.assign(blankLoc(), S.homeSubtitle);
   } catch (e) {
     if (e.status === 401) return showLogin();

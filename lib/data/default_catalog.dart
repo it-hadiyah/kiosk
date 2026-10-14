@@ -233,6 +233,30 @@ const kDefaultCatalogJson = r'''{
       "id": "sadaqah",
       "size": "large"
     }
-  ]
+  ],
+  "featured": {
+    "enabled": true,
+    "intervalSeconds": 5,
+    "title": {
+      "ar": "الأكثر رواجاً",
+      "fr": "Les plus populaires",
+      "en": "Most popular",
+      "ur": "سب سے زیادہ مقبول"
+    },
+    "items": [
+      {
+        "type": "program",
+        "id": "water"
+      },
+      {
+        "type": "program",
+        "id": "sadaqah"
+      },
+      {
+        "type": "program",
+        "id": "iftar"
+      }
+    ]
+  }
 }
 ''';

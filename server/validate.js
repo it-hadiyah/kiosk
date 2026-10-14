@@ -124,6 +124,21 @@ function normalize(input) {
     home.push({ type, id, size: SIZES.includes(h.size) ? h.size : 'medium' });
   }
 
+  // شريط «الأكثر رواجاً»: برامج/كتالوجات محددة تُعرض واحداً واحداً بالتناوب أعلى صفحة المتبرع
+  const fsrc = isObj(src.featured) ? src.featured : {};
+  const featured = { enabled: fsrc.enabled === true, intervalSeconds: int(fsrc.intervalSeconds, 2, 60, 5), title: loc(fsrc.title), items: [] };
+  const seenF = new Set();
+  for (const h of Array.isArray(fsrc.items) ? fsrc.items : []) {
+    if (!isObj(h)) continue;
+    const type = h.type === 'catalog' ? 'catalog' : 'program';
+    const id = str(h.id, 40);
+    if (!(type === 'catalog' ? catIds.has(id) : progIds.has(id))) { warnings.push(`عنصر في «الأكثر رواجاً» غير موجود (${type}:${id}) أُزيل`); continue; }
+    if (seenF.has(type + id)) continue;
+    seenF.add(type + id);
+    if (featured.items.length < 10) featured.items.push({ type, id });
+  }
+  if (featured.enabled && !featured.items.length) warnings.push('«الأكثر رواجاً» مفعّل لكن بلا عناصر — لن يظهر');
+
   return {
     catalog: {
       schemaVersion: 1,
@@ -132,6 +147,7 @@ function normalize(input) {
       programs,
       catalogs,
       home,
+      featured,
     },
     errors,
     warnings,

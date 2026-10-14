@@ -25,7 +25,9 @@ CatalogData _data({
   List<Map<String, dynamic>> catalogs = const [],
   List<Map<String, dynamic>> home = const [],
   Map<String, dynamic> settings = const {},
+  Map<String, dynamic>? featured,
 }) => CatalogData.fromJson({
+  'featured': ?featured,
   'settings': settings,
   'programs': programs,
   'catalogs': catalogs,
@@ -491,6 +493,153 @@ void main() {
         expect(find.textContaining('Connection refused'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'featured carousel: shows chosen items one at a time, rotates, tap opens',
+      (t) async {
+        await start(
+          t,
+          _data(
+            programs: [_prog('a'), _prog('b'), _prog('c')],
+            home: [
+              {'type': 'program', 'id': 'a'},
+              {'type': 'program', 'id': 'b'},
+              {'type': 'program', 'id': 'c'},
+            ],
+            featured: {
+              'enabled': true,
+              'intervalSeconds': 3,
+              'items': [
+                {'type': 'program', 'id': 'c'},
+                {'type': 'program', 'id': 'a'},
+              ],
+            },
+          ),
+        );
+        expect(find.byKey(const Key('featured_carousel')), findsOneWidget);
+        expect(
+          find.byKey(const Key('featured_program_c')),
+          findsOneWidget,
+        ); // الأول بالترتيب
+        expect(
+          find.byKey(const Key('featured_program_b')),
+          findsNothing,
+        ); // غير المختار لا يظهر
+        expect(find.text('الأكثر رواجاً'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('featured_dots')),
+            matching: find.byType(AnimatedContainer),
+          ),
+          findsNWidgets(2),
+        );
+
+        await t.pump(const Duration(seconds: 3));
+        await t.pump(const Duration(milliseconds: 900)); // انتهاء حركة التبديل
+        expect(find.byKey(const Key('featured_program_a')), findsOneWidget);
+        expect(find.byKey(const Key('featured_program_c')), findsNothing);
+        await t.pump(const Duration(seconds: 3));
+        await t.pump(const Duration(milliseconds: 900));
+        expect(
+          find.byKey(const Key('featured_program_c')),
+          findsOneWidget,
+        ); // يدور من جديد
+
+        await t.tap(find.byKey(const Key('featured_program_c')));
+        await t.pumpAndSettle();
+        expect(find.byKey(const Key('project_name')), findsOneWidget);
+        expect(find.text('برنامج c'), findsWidgets);
+        // والتبديل متوقف أثناء ظهور شاشة أخرى (لا أخطاء ولا مؤقتات معلّقة)
+        await t.pump(const Duration(seconds: 20));
+        await t.tap(find.byKey(const Key('back')));
+        await t.pumpAndSettle();
+        expect(find.byKey(const Key('featured_carousel')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'featured carousel: hidden when disabled or empty; single item has no dots',
+      (t) async {
+        final prog = [_prog('a'), _prog('b')];
+        final home = [
+          {'type': 'program', 'id': 'a'},
+          {'type': 'program', 'id': 'b'},
+        ];
+        await start(
+          t,
+          _data(
+            programs: prog,
+            home: home,
+            featured: {
+              'enabled': false,
+              'items': [
+                {'type': 'program', 'id': 'a'},
+              ],
+            },
+          ),
+        );
+        expect(find.byKey(const Key('featured_carousel')), findsNothing);
+        await t.pumpWidget(const SizedBox.shrink());
+
+        await start(
+          t,
+          _data(
+            programs: prog,
+            home: home,
+            featured: {'enabled': true, 'items': []},
+          ),
+        );
+        expect(find.byKey(const Key('featured_carousel')), findsNothing);
+        await t.pumpWidget(const SizedBox.shrink());
+
+        await start(
+          t,
+          _data(
+            programs: prog,
+            home: home,
+            featured: {
+              'enabled': true,
+              'items': [
+                {'type': 'program', 'id': 'b'},
+              ],
+            },
+          ),
+        );
+        expect(find.byKey(const Key('featured_carousel')), findsOneWidget);
+        expect(find.byKey(const Key('featured_dots')), findsNothing);
+      },
+    );
+
+    testWidgets('featured carousel: custom badge text and language switch', (
+      t,
+    ) async {
+      await start(
+        t,
+        _data(
+          programs: [_prog('a')],
+          home: [
+            {'type': 'program', 'id': 'a'},
+          ],
+          featured: {
+            'enabled': true,
+            'title': {'ar': 'الأكثر طلباً', 'en': 'Top picks'},
+            'items': [
+              {'type': 'program', 'id': 'a'},
+            ],
+          },
+        ),
+      );
+      expect(find.text('الأكثر طلباً'), findsOneWidget);
+      await t.tap(find.byKey(const Key('lang_en')));
+      await wait(t, 500);
+      expect(find.text('Top picks'), findsOneWidget);
+      await t.tap(find.byKey(const Key('lang_fr')));
+      await wait(t, 500);
+      expect(
+        find.text('Les plus populaires'),
+        findsOneWidget,
+      ); // لا نص مخصص بالفرنسية ← الافتراضي
+    });
 
     testWidgets(
       'titles from settings override defaults; every language falls back safely',

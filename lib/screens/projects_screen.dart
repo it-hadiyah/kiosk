@@ -5,6 +5,7 @@ import '../l10n/strings.dart';
 import '../state/donation_state.dart';
 import '../theme/theme.dart';
 import '../widgets/common.dart';
+import '../widgets/featured_carousel.dart';
 import '../widgets/tile_grid.dart';
 import 'amount_screen.dart';
 import 'catalog_screen.dart';
@@ -48,6 +49,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     final title = data.settings.homeTitle.exact(st.lang);
     final sub = data.settings.homeSubtitle.exact(st.lang);
     final tiles = data.homeTiles;
+    final featured = data.featuredTiles;
     return Scaffold(
       body: Column(
         children: [
@@ -69,6 +71,25 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (featured.isNotEmpty) ...[
+                    FeaturedCarousel(
+                      // يُعاد بناؤه عند تغيّر العناصر أو المدة من لوحة التحكم
+                      key: ValueKey(
+                        '${featured.map((t) => t.key).join(',')}|${data.featured.intervalSeconds}',
+                      ),
+                      tiles: featured,
+                      lang: st.lang,
+                      service: st.catalog,
+                      interval: Duration(
+                        seconds: data.featured.intervalSeconds,
+                      ),
+                      label: data.featured.title.exact(st.lang).isEmpty
+                          ? s.popular
+                          : data.featured.title.exact(st.lang),
+                      onOpen: _open,
+                    ),
+                    SizedBox(height: context.d(44)),
+                  ],
                   FadeSlideIn(
                     child: Text(
                       title.isEmpty ? s.headline : title,
