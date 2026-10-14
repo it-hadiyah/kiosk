@@ -95,6 +95,7 @@ class _KioskAppState extends State<KioskApp> {
   }
 
   void _endSession() {
+    _state.trackAbandoned();
     _state.reset();
     _catalog.refresh(); // الزائر التالي يرى أحدث نسخة
     _nav.currentState?.popUntil((r) => r.isFirst);

@@ -46,6 +46,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     super.didChangeDependencies();
     if (_started) return;
     _started = true;
+    widget.state.trackPaymentStarted();
     if (context.reduceMotion) {
       _loop.value = .5; // إطار ثابت بدل حركة متكررة
     } else {
@@ -66,6 +67,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   void _complete() {
+    widget.state.trackCompleted();
     setState(() => _phase = _Phase.done);
     _loop.stop();
     context.reduceMotion ? _check.value = 1 : _check.forward();

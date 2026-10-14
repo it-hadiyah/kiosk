@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hadiyah_kiosk/app.dart';
+import 'package:hadiyah_kiosk/data/analytics.dart';
 import 'package:hadiyah_kiosk/data/catalog_service.dart';
 import 'package:hadiyah_kiosk/data/models.dart';
 import 'package:hadiyah_kiosk/l10n/strings.dart';
@@ -585,6 +586,84 @@ void main() {
       // 999 > 500 → الرقم الأخير مرفوض، يبقى 99
       expect(find.text('99 ر.س'), findsWidgets);
       expect(find.text('999 ر.س'), findsNothing);
+    });
+
+    testWidgets('demo analytics: a full simulated donation emits the funnel', (
+      t,
+    ) async {
+      size(t);
+      final events = <Map<String, Object?>>[];
+      final svc =
+          CatalogService.fixed(
+              _data(
+                programs: [
+                  _prog('z', extra: {'kind': 'free'}),
+                ],
+                home: [
+                  {'type': 'program', 'id': 'z'},
+                ],
+              ),
+            )
+            ..analytics = Analytics(
+              'http://x',
+              sender: (u, b) async => events.add(b),
+            );
+      await t.pumpWidget(KioskApp(catalog: svc));
+      await wait(t);
+      await t.tap(find.byKey(const Key('welcome_donate')));
+      await wait(t);
+      await t.tap(find.byKey(const Key('program_z')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('key_4')));
+      await t.tap(find.byKey(const Key('key_0')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('popup_donate')));
+      await t.pumpAndSettle();
+      for (var i = 0; i < 20; i++) {
+        await t.pump(const Duration(seconds: 1));
+      }
+      expect(events.map((e) => e['type']).toList(), [
+        'session_start',
+        'program_selected',
+        'amount_chosen',
+        'payment_started',
+        'payment_completed',
+      ]);
+      expect(events[1]['programId'], 'z');
+      expect(events[2]['amount'], 40);
+      expect(events.every((e) => !e.containsKey('name')), isTrue);
+    });
+
+    testWidgets('demo analytics: idle timeout mid-session logs abandonment', (
+      t,
+    ) async {
+      size(t);
+      final events = <String>[];
+      final svc =
+          CatalogService.fixed(
+              _data(
+                programs: [_prog('a')],
+                home: [
+                  {'type': 'program', 'id': 'a'},
+                ],
+              ),
+            )
+            ..analytics = Analytics(
+              'http://x',
+              sender: (u, b) async => events.add(b['type'] as String),
+            );
+      await t.pumpWidget(
+        KioskApp(
+          catalog: svc,
+          idleTimeout: const Duration(seconds: 3),
+          warnFor: const Duration(seconds: 1),
+        ),
+      );
+      await wait(t);
+      await t.tap(find.byKey(const Key('welcome_donate')));
+      await wait(t);
+      await t.pump(const Duration(seconds: 8));
+      expect(events, ['session_start', 'session_abandoned']);
     });
 
     testWidgets(

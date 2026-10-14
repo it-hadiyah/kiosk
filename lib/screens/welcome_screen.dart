@@ -78,6 +78,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   Future<void> _donate() async {
     if (_navigating) return; // يمنع الضغط المزدوج
     _navigating = true;
+    widget.state.trackStart();
     await Navigator.of(context)
         .push(kioskRoute(ProjectsScreen(state: widget.state)));
     _navigating = false;

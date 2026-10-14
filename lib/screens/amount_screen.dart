@@ -82,6 +82,7 @@ class _AmountScreenState extends State<AmountScreen> {
     if (!_valid || _navigating) return;
     _navigating = true;
     widget.state.amount = _amount;
+    widget.state.trackAmount(_amount);
     await Navigator.of(context)
         .push(kioskRoute(PaymentScreen(state: widget.state)));
     _navigating = false;

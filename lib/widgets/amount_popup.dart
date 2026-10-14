@@ -18,6 +18,7 @@ Future<void> openProgram(
   Program program,
 ) async {
   state.program = program;
+  state.trackProgram(program);
   if (program.kind != ProgramKind.free) {
     await Navigator.of(context).push(kioskRoute(AmountScreen(state: state)));
     return;
@@ -29,6 +30,7 @@ Future<void> openProgram(
   );
   if (amount == null || !context.mounted) return;
   state.amount = amount;
+  state.trackAmount(amount);
   await Navigator.of(context).push(kioskRoute(PaymentScreen(state: state)));
 }
 

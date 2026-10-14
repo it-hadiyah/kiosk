@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'analytics.dart';
 import 'models.dart';
 
 /// نتيجة طلب الكتالوج من الخادم.
@@ -46,6 +47,9 @@ class CatalogService extends ChangeNotifier {
   final Directory _cacheDir;
   final Duration refreshEvery;
 
+  /// إحصائيات المحاكاة التجريبية (تُهمل عند غياب الخادم).
+  late Analytics analytics = Analytics(baseUrl);
+
   CatalogData data;
   String? etag;
   String? lastError;
@@ -71,6 +75,7 @@ class CatalogService extends ChangeNotifier {
   Future<void> init() async {
     await _loadCached();
     if (baseUrl.isEmpty) return;
+    KioskInfo.deviceId = await Analytics.loadDeviceId(_cacheDir);
     unawaited(refresh());
     if (refreshEvery > Duration.zero) {
       _timer = Timer.periodic(refreshEvery, (_) => refresh());
@@ -209,6 +214,10 @@ Future<FetchResult> _httpFetch(Uri url, {String? etag}) async {
   try {
     final req = await c.getUrl(url);
     if (etag != null) req.headers.set(HttpHeaders.ifNoneMatchHeader, etag);
+    if (KioskInfo.deviceId.isNotEmpty) {
+      req.headers.set('X-Kiosk-Device', KioskInfo.deviceId);
+      req.headers.set('X-Kiosk-Version', KioskInfo.version);
+    }
     final resp = await req.close().timeout(const Duration(seconds: 12));
     final tag = resp.headers.value(HttpHeaders.etagHeader);
     if (resp.statusCode == 304) {
