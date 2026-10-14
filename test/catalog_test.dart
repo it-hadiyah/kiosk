@@ -438,7 +438,7 @@ void main() {
         t,
         _data(
           programs: [
-            _prog('z', extra: {'freeEntry': true}),
+            _prog('z', extra: {'kind': 'free'}),
           ],
           home: [
             {'type': 'program', 'id': 'z'},

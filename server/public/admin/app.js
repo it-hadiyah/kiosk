@@ -25,7 +25,7 @@ const SIZES = ['small', 'medium', 'large'];
 const UNITS = { small: 2, medium: 3, large: 6 };          // سعة الصف = 6 وحدات
 const SIZE_LABEL = { small: 'صغير', medium: 'متوسط', large: 'كبير' };
 const SIZE_HINT = { small: 'ثلث العرض', medium: 'نصف العرض', large: 'العرض كاملاً' };
-const KIND_LABEL = { open: 'مبلغ يختاره المتبرع', presets: 'مبالغ محددة', fixed: 'قيمة ثابتة' };
+const KIND_LABEL = { open: 'مبلغ يختاره المتبرع', presets: 'مبالغ محددة', fixed: 'قيمة ثابتة', free: 'يكتب المبلغ مباشرة' };
 const ALIGN_LABEL = { center: 'وسط', top: 'أعلى', bottom: 'أسفل' };
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 const MAX_UPLOAD = 6 * 1024 * 1024;
@@ -145,6 +145,7 @@ function setPath(o, path, v) { const ks = path.split('.'); const last = ks.pop()
 function normClient(c) {
   const f = (c.featured && typeof c.featured === 'object') ? c.featured : {};
   c.featured = { enabled: f.enabled === true, intervalSeconds: f.intervalSeconds === '' ? '' : (isNum(f.intervalSeconds) ? f.intervalSeconds : 5), title: Object.assign(blankLoc(), f.title), items: Array.isArray(f.items) ? f.items : [] };
+  (c.programs || []).forEach((p) => { if (p.kind === 'open' && p.freeEntry) p.kind = 'free'; delete p.freeEntry; });
   return c;
 }
 const featIndex = (type, id) => C().featured.items.findIndex((x) => x.type === type && x.id === id);
@@ -169,8 +170,8 @@ function progErrors(p, S, otherIds) {
   const num = (v, d) => (v === '' || v == null ? d : Number(v));
   if (p.kind === 'fixed' && !(num(p.price, 0) >= 1)) e.price = 'القيمة الثابتة يجب أن تكون 1 أو أكثر';
   const mn = num(p.minAmount, 1), mx = num(p.maxAmount, S.maxAmount);
-  if (mn < 1) e.minAmount = 'الحد الأدنى 1 على الأقل';
-  if (mx < mn) e.maxAmount = 'الحد الأعلى يجب ألا يقل عن الحد الأدنى';
+  if (p.kind !== 'free' && mn < 1) e.minAmount = 'الحد الأدنى 1 على الأقل';
+  if (p.kind !== 'free' && mx < mn) e.maxAmount = 'الحد الأعلى يجب ألا يقل عن الحد الأدنى';
   if (p.kind === 'fixed' && p.allowQuantity) {
     const mq = num(p.maxQuantity, 99); if (!(mq >= 1 && mq <= 999)) e.maxQuantity = 'أقصى كمية بين 1 و 999';
   }
@@ -587,7 +588,7 @@ function summary(p) {
   const S = C().settings;
   if (p.kind === 'fixed') return `قيمة ثابتة: ${nf(p.price || 0)}` + (p.allowQuantity ? ` · كمية حتى ${p.maxQuantity}` : '');
   const own = p.presets.length; const arr = own ? p.presets : S.quickAmounts;
-  if (p.kind === 'open' && p.freeEntry) return 'المتبرع يكتب المبلغ مباشرةً';
+  if (p.kind === 'free') return 'المتبرع يكتب المبلغ مباشرةً';
   return (p.kind === 'open' ? 'مبلغ حر + ' : 'مبالغ: ') + arr.map(nf).join(' · ') + (own ? '' : ' (الافتراضية)');
 }
 function placementChips(p) {
@@ -676,7 +677,7 @@ function diffCatalogs(a, b) {
   const G = [];
   /* البرامج */
   const pg = { title: 'البرامج', items: [] }; G.push(pg);
-  const FL = { active: 'التفعيل', title: 'العناوين', image: 'الصورة', imageAlign: 'محاذاة الصورة', kind: 'النوع', price: 'القيمة', presets: 'المبالغ المحددة', minAmount: 'الحد الأدنى', maxAmount: 'الحد الأعلى', allowQuantity: 'خيار الكمية', freeEntry: 'إدخال المبلغ مباشرة', maxQuantity: 'أقصى كمية' };
+  const FL = { active: 'التفعيل', title: 'العناوين', image: 'الصورة', imageAlign: 'محاذاة الصورة', kind: 'النوع', price: 'القيمة', presets: 'المبالغ المحددة', minAmount: 'الحد الأدنى', maxAmount: 'الحد الأعلى', allowQuantity: 'خيار الكمية', maxQuantity: 'أقصى كمية' };
   const am = new Map(a.programs.map((p) => [p.id, p]));
   b.programs.forEach((p) => {
     const o = am.get(p.id); if (!o) return pg.items.push({ k: 'add', t: `إضافة برنامج ${nm(p)}` });
@@ -730,7 +731,7 @@ function diffCatalogs(a, b) {
    10) المحرّرات (Drawer)
    ===================================================================== */
 function newProgram() {
-  return { id: '', active: true, title: blankLoc(), image: '', imageAlign: 'center', kind: 'open', price: 0, presets: [], minAmount: 1, maxAmount: C().settings.maxAmount, allowQuantity: false, maxQuantity: 99, freeEntry: false };
+  return { id: '', active: true, title: blankLoc(), image: '', imageAlign: 'center', kind: 'open', price: 0, presets: [], minAmount: 1, maxAmount: C().settings.maxAmount, allowQuantity: false, maxQuantity: 99 };
 }
 function newCatalog() { return { id: '', active: true, title: blankLoc(), subtitle: blankLoc(), image: '', imageAlign: 'center', items: [] }; }
 
@@ -778,17 +779,18 @@ function placementsHtml() {
 
 function programEditorHtml() {
   const p = ui.edit.obj || findProg(ui.edit.id); const e = ui.edit;
-  const kinds = [['open', 'يختار المتبرع المبلغ (مبالغ سريعة + مبلغ آخر) — مثل الصدقة'], ['presets', 'مبالغ محددة فقط'], ['fixed', 'قيمة ثابتة لا يغيّرها المتبرع']];
+  const kinds = [['open', 'يختار المتبرع المبلغ (مبالغ سريعة + مبلغ آخر) — مثل الصدقة'], ['presets', 'مبالغ محددة فقط'], ['fixed', 'قيمة ثابتة لا يغيّرها المتبرع'], ['free', 'بلا مبالغ جاهزة — يكتب المتبرع المبلغ مباشرةً (مثل الزكاة)']];
   let cond = '';
   if (p.kind === 'fixed') {
     cond = `${numField('prog', 'price', 'القيمة (1 أو أكثر)', p.price, { min: 1, blank0: true, ph: 'مثال: 15' })}
       <label class="check"><input type="checkbox" data-ctx="prog" data-f="allowQuantity" data-rerender ${p.allowQuantity ? 'checked' : ''}><span>السماح للمتبرع باختيار الكمية (عدّاد)</span></label>
       ${p.allowQuantity ? numField('prog', 'maxQuantity', 'أقصى كمية', p.maxQuantity, { min: 1, max: 999 }) : ''}`;
+  } else if (p.kind === 'free') {
+    cond = '';
   } else if (p.kind === 'presets') {
     cond = chipsEditor('prog:presets', 'المبالغ المحددة', 'إذا تركتها فارغة تُستخدم المبالغ السريعة العامة: ' + C().settings.quickAmounts.map(nf).join('، '));
   } else {
-    cond = `<label class="check"><input type="checkbox" data-ctx="prog" data-f="freeEntry" data-rerender ${p.freeEntry ? 'checked' : ''}><span>بلا مبالغ جاهزة — يكتب المتبرع المبلغ مباشرةً (مثل الزكاة والصدقة)</span></label>
-      ${p.freeEntry ? '' : chipsEditor('prog:presets', 'مبالغ سريعة خاصة بهذا البرنامج (اختياري)', 'إذا تركتها فارغة تُستخدم المبالغ السريعة العامة: ' + C().settings.quickAmounts.map(nf).join('، '))}
+    cond = `${chipsEditor('prog:presets', 'مبالغ سريعة خاصة بهذا البرنامج (اختياري)', 'إذا تركتها فارغة تُستخدم المبالغ السريعة العامة: ' + C().settings.quickAmounts.map(nf).join('، '))}
       <div class="grid2">${numField('prog', 'minAmount', 'أقل مبلغ', p.minAmount, { min: 1 })}${numField('prog', 'maxAmount', 'أعلى مبلغ', p.maxAmount, { min: 1 })}</div>`;
   }
   return `<div class="stack">
@@ -1035,7 +1037,7 @@ function onField(el, ev) {
     }
   } else markDirty();
   if (ev.target.hasAttribute('data-rerender')) {
-    if (f === 'kind') { if (v === 'fixed' && !(o.price >= 1)) o.price = 0; }
+    if (f === 'kind') { if (v === 'fixed' && !(o.price >= 1)) o.price = 0; if (v === 'free') { o.minAmount = 1; o.maxAmount = C().settings.maxAmount; } }
     const sig = type === 'radio' ? `[data-f="${f}"][value="${v}"]` : `[data-f="${f}"]`;
     renderDrawer(false); const nf2 = $('#drawerBody ' + sig); if (nf2) nf2.focus(); return;
   }

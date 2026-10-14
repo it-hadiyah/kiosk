@@ -3,7 +3,7 @@
 
 const LANGS = ['ar', 'fr', 'en', 'ur'];
 const SIZES = ['small', 'medium', 'large'];
-const KINDS = ['open', 'presets', 'fixed'];
+const KINDS = ['open', 'presets', 'fixed', 'free'];
 const ALIGNS = ['center', 'top', 'bottom'];
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 
@@ -60,7 +60,7 @@ function normalize(input) {
     if (ids.has('p:' + id)) { errors.push(`معرّف برنامج مكرر: ${id}`); continue; }
     ids.add('p:' + id);
     if (!title.ar) errors.push(`البرنامج ${id}: العنوان العربي إلزامي`);
-    const kind = KINDS.includes(p.kind) ? p.kind : 'open';
+    const kind = p.kind === 'open' && p.freeEntry === true ? 'free' : (KINDS.includes(p.kind) ? p.kind : 'open');
     const prog = {
       id,
       active: p.active !== false,
@@ -70,11 +70,10 @@ function normalize(input) {
       kind,
       price: int(p.price, 0, 9999999, 0),
       presets: [...new Set((Array.isArray(p.presets) ? p.presets : []).map((n) => int(n, 1, 9999999, 0)).filter((n) => n > 0))].slice(0, 8),
-      minAmount: int(p.minAmount, 1, 9999999, 1),
-      maxAmount: int(p.maxAmount, 1, 9999999, settings.maxAmount),
+      minAmount: kind === 'free' ? 1 : int(p.minAmount, 1, 9999999, 1),
+      maxAmount: kind === 'free' ? settings.maxAmount : int(p.maxAmount, 1, 9999999, settings.maxAmount),
       allowQuantity: kind === 'fixed' && p.allowQuantity === true,
       maxQuantity: int(p.maxQuantity, 1, 999, 99),
-      freeEntry: kind === 'open' && p.freeEntry === true,
     };
     if (prog.maxAmount < prog.minAmount) errors.push(`البرنامج ${name}: الحد الأعلى أقل من الأدنى`);
     if (kind === 'fixed' && prog.price < 1) errors.push(`البرنامج ${name}: القيمة الثابتة يجب أن تكون 1 أو أكثر`);

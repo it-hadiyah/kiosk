@@ -26,7 +26,7 @@
 }
 ```
 - **Program**: `id` (a-z0-9_-، فريد)، `active`، `title{ar,fr,en,ur}` (العربية إلزامية)، `image`، `imageAlign` (`center|top|bottom`)،
-  `kind` = `open` (مبالغ سريعة + «مبلغ آخر») | `presets` (مبالغ محددة فقط) | `fixed` (قيمة ثابتة)،
+  `kind` = `open` (مبالغ سريعة + «مبلغ آخر») | `presets` (مبالغ محددة فقط) | `fixed` (قيمة ثابتة) | `free` (بلا مبالغ جاهزة، المتبرع يكتب المبلغ)،
   `price` (للثابت)، `presets[]` (فارغة = تُستخدم `settings.quickAmounts`)، `minAmount`، `maxAmount`،
   `allowQuantity` (للثابت: عدّاد كمية)، `maxQuantity`.
 - **Catalog**: `id`، `active`، `title`، `subtitle`، `image`، `imageAlign`، `items:[{programId,size}]`.

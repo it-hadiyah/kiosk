@@ -45,7 +45,10 @@ enum ProgramKind {
   presets,
 
   /// قيمة ثابتة (مع كمية اختيارية).
-  fixed;
+  fixed,
+
+  /// بلا مبالغ جاهزة: يكتب المتبرع المبلغ مباشرةً.
+  free;
 
   static ProgramKind parse(Object? v) => ProgramKind.values.firstWhere(
     (k) => k.name == v,
@@ -93,7 +96,6 @@ class Program {
     this.maxAmount = 99999,
     this.allowQuantity = false,
     this.maxQuantity = 99,
-    this.freeEntry = false,
     this.active = true,
   });
 
@@ -110,8 +112,7 @@ class Program {
   final bool allowQuantity;
   final int maxQuantity;
 
-  /// بلا مبالغ جاهزة: يكتب المتبرع المبلغ مباشرةً (للنوع open فقط).
-  final bool freeEntry;
+  bool get freeEntry => kind == ProgramKind.free;
 
   static Program? fromJson(Object? j) {
     if (j is! Map) return null;
@@ -123,7 +124,9 @@ class Program {
       title: Localized.from(j['title']),
       image: j['image'] is String ? j['image'] as String : '',
       align: _align(j['imageAlign']),
-      kind: ProgramKind.parse(j['kind']),
+      kind: j['kind'] == 'open' && j['freeEntry'] == true
+          ? ProgramKind.free
+          : ProgramKind.parse(j['kind']),
       price: _int(j['price'], 0),
       presets: [
         if (j['presets'] is List)
@@ -134,9 +137,6 @@ class Program {
       maxAmount: _int(j['maxAmount'], 99999, min: 1),
       allowQuantity: j['allowQuantity'] == true,
       maxQuantity: _int(j['maxQuantity'], 99, min: 1, max: 999),
-      freeEntry:
-          ProgramKind.parse(j['kind']) == ProgramKind.open &&
-          j['freeEntry'] == true,
     );
   }
 }

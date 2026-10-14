@@ -135,14 +135,13 @@ const kDefaultCatalogJson = r'''{
         "en": "Zakat",
         "ur": "زکوٰۃ"
       },
-      "kind": "open",
+      "kind": "free",
       "price": 0,
       "presets": [],
       "minAmount": 1,
       "maxAmount": 99999,
       "allowQuantity": false,
-      "maxQuantity": 99,
-      "freeEntry": true
+      "maxQuantity": 99
     },
     {
       "id": "sadaqah",
@@ -155,14 +154,13 @@ const kDefaultCatalogJson = r'''{
         "en": "Your Sadaqah",
         "ur": "آپ کا صدقہ"
       },
-      "kind": "open",
+      "kind": "free",
       "price": 0,
       "presets": [],
       "minAmount": 1,
       "maxAmount": 99999,
       "allowQuantity": false,
-      "maxQuantity": 99,
-      "freeEntry": true
+      "maxQuantity": 99
     }
   ],
   "catalogs": [
