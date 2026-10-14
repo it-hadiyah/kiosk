@@ -170,9 +170,9 @@ async function main() {
     for (const l of ['ar', 'fr', 'en', 'ur']) await page.fill(`[data-ctx=feat][data-f="title.${l}"]`, '');
     ok((await page.textContent('[data-region=featWarn]')).includes('بلا عناصر'), 'warning when enabled but empty');
     ok((await page.$('.pv-feat')) === null, 'featured hidden in preview when empty');
-    await page.uncheck('[data-ctx=feat][data-f=enabled]');
+    await page.click('.switch:has([data-ctx=feat][data-f=enabled])');
     ok((await page.textContent('[data-region=featWarn]')) === '', 'no warning when disabled');
-    await page.check('[data-ctx=feat][data-f=enabled]');
+    await page.click('.switch:has([data-ctx=feat][data-f=enabled])');
     for (const id of ['program:water', 'program:iftar']) { await page.selectOption('#featAdd', id); await page.click('[data-act=feat-add]'); }
     ok((await page.$$('[data-dnd-list=feat] .row')).length === 2, 'two featured items added');
     await page.click('[data-dnd-list=feat] [data-act=move][data-i="1"][data-d="-1"]');
