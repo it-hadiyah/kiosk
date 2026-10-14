@@ -58,10 +58,16 @@ class _AmountScreenState extends State<AmountScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.state,
+    builder: (context, _) => _page(context),
+  );
+
+  Widget _page(BuildContext context) {
     final st = widget.state;
-    final s = S(st.arabic);
-    final p = st.project!;
+    final s = S(st.lang);
+    final p = st.project;
+    if (p == null) return const SizedBox.shrink(); // الجلسة انتهت أثناء الإغلاق
     return Scaffold(
       body: Column(
         children: [
@@ -78,7 +84,7 @@ class _AmountScreenState extends State<AmountScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   FadeSlideIn(
-                    child: _ProjectHeader(project: p, isAr: s.ar),
+                    child: _ProjectHeader(project: p, lang: s.lang),
                   ),
                   SizedBox(height: context.d(44)),
                   FadeSlideIn(
@@ -103,6 +109,7 @@ class _AmountScreenState extends State<AmountScreen> {
                             child: _AmountTile(
                               key: Key('amount_${kQuickAmounts[i]}'),
                               value: kQuickAmounts[i],
+                              currency: s.sar,
                               selected: !_custom && _preset == kQuickAmounts[i],
                               onTap: () => _pickPreset(kQuickAmounts[i]),
                             ),
@@ -166,7 +173,7 @@ class _AmountScreenState extends State<AmountScreen> {
                 Row(
                   children: [
                     Text(
-                      s.enterAmount,
+                      s.amountLabel,
                       style: TextStyle(
                         fontSize: context.d(30),
                         color: HColors.muted,
@@ -223,16 +230,17 @@ class _AmountTile extends StatelessWidget {
   const _AmountTile({
     super.key,
     required this.value,
+    required this.currency,
     required this.selected,
     required this.onTap,
   });
   final int value;
+  final String currency;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final isAr = Localizations.localeOf(context).languageCode == 'ar';
     return Pressable(
       onTap: onTap,
       child: AnimatedContainer(
@@ -253,7 +261,7 @@ class _AmountTile extends StatelessWidget {
               ),
             ),
             Text(
-              S(isAr).sar,
+              currency,
               style: TextStyle(
                 fontSize: context.d(24),
                 color: selected ? HColors.teal : HColors.muted,
@@ -267,9 +275,9 @@ class _AmountTile extends StatelessWidget {
 }
 
 class _ProjectHeader extends StatelessWidget {
-  const _ProjectHeader({required this.project, required this.isAr});
+  const _ProjectHeader({required this.project, required this.lang});
   final Project project;
-  final bool isAr;
+  final AppLang lang;
 
   @override
   Widget build(BuildContext context) {
@@ -301,7 +309,7 @@ class _ProjectHeader extends StatelessWidget {
           SizedBox(width: context.d(28)),
           Expanded(
             child: Text(
-              project.title(isAr),
+              project.title(lang),
               key: const Key('project_name'),
               style: TextStyle(
                 fontSize: context.d(54),

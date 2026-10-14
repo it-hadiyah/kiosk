@@ -100,9 +100,18 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.state,
+    builder: (context, _) => _page(context),
+  );
+
+  Widget _page(BuildContext context) {
     final st = widget.state;
-    final s = S(st.arabic);
+    final s = S(st.lang);
+    final project = st.project;
+    if (project == null) {
+      return const SizedBox.shrink(); // الجلسة انتهت أثناء الإغلاق
+    }
     final done = _phase == _Phase.done;
     return PopScope(
       canPop: !done,
@@ -123,7 +132,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                     DemoBadge(text: s.demoBadge),
                     SizedBox(height: context.d(36)),
                     Text(
-                      st.project!.title(s.ar),
+                      project.title(s.lang),
                       style: TextStyle(
                         fontSize: context.d(40),
                         color: HColors.muted,

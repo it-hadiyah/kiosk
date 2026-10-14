@@ -29,8 +29,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final s = S(widget.state.arabic);
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.state,
+    builder: (context, _) => _page(context),
+  );
+
+  Widget _page(BuildContext context) {
+    final s = S(widget.state.lang);
     final gap = context.d(34);
     final pairs = <Widget>[];
     var i = 0;
@@ -48,7 +53,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     return Scaffold(
       body: Column(
         children: [
-          HeaderBar(s: s, onToggleLang: widget.state.toggleLanguage),
+          HeaderBar(
+            s: s,
+            iconBack: true,
+            onBack: () => Navigator.of(context).pop(),
+            lang: widget.state.lang,
+            onLang: widget.state.setLang,
+          ),
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
@@ -100,13 +111,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     int index, {
     bool wide = false,
   }) {
-    final s = S(widget.state.arabic);
+    final s = S(widget.state.lang);
     final r = BorderRadius.circular(context.d(32));
     final label = Row(
       children: [
         Expanded(
           child: Text(
-            p.title(s.ar),
+            p.title(s.lang),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -117,9 +128,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           ),
         ),
         Icon(
-          s.ar
-              ? Icons.arrow_back_ios_new_rounded
-              : Icons.arrow_forward_ios_rounded,
+          Icons.arrow_forward_ios_rounded,
           size: context.d(28),
           color: HColors.teal,
         ),

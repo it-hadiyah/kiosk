@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'l10n/strings.dart';
-import 'screens/projects_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'state/donation_state.dart';
 import 'theme/theme.dart';
 
@@ -45,7 +45,9 @@ class _KioskAppState extends State<KioskApp> {
   void _onIdle() {
     final nav = _nav.currentState;
     if (nav == null || !nav.canPop()) {
-      _resetIdle(); // على الشاشة الرئيسية لا حاجة
+      // على صفحة البداية: لا تنبيه، لكن نعيد اللغة للعربية للزائر التالي
+      if (_state.lang != AppLang.ar) _state.reset();
+      _resetIdle();
       return;
     }
     _warning = true;
@@ -53,7 +55,7 @@ class _KioskAppState extends State<KioskApp> {
       _closeWarning();
       _endSession();
     });
-    final s = S(_state.arabic);
+    final s = S(_state.lang);
     showDialog<void>(
       context: _nav.currentContext!,
       barrierDismissible: false,
@@ -95,16 +97,16 @@ class _KioskAppState extends State<KioskApp> {
 
   @override
   Widget build(BuildContext context) {
-    final ar = _state.arabic;
+    final lang = _state.lang;
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) => _resetIdle(),
       child: MaterialApp(
         navigatorKey: _nav,
         debugShowCheckedModeBanner: false,
-        title: S(ar).appName,
-        locale: Locale(ar ? 'ar' : 'en'),
-        supportedLocales: const [Locale('ar'), Locale('en')],
+        title: S(lang).appName,
+        locale: Locale(lang.code),
+        supportedLocales: [for (final l in AppLang.values) Locale(l.code)],
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
@@ -112,7 +114,7 @@ class _KioskAppState extends State<KioskApp> {
         ],
         theme: buildTheme(),
         builder: kioskFrame,
-        home: ProjectsScreen(state: _state),
+        home: WelcomeScreen(state: _state),
       ),
     );
   }

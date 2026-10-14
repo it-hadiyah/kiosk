@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/strings.dart';
 import '../theme/theme.dart';
+import 'language_selector.dart';
 
 /// انتقال سلس بين الخطوات: تلاشي + انزلاق خفيف (يُلغى مع تقليل الحركة).
 Route<T> kioskRoute<T>(Widget page) {
@@ -92,19 +93,25 @@ class FadeSlideIn extends StatelessWidget {
   }
 }
 
-/// الشريط العلوي: الشعار + (تبديل اللغة | رجوع/إلغاء).
+/// الشريط العلوي: الشعار + (اختيار اللغة | رجوع/إلغاء).
 class HeaderBar extends StatelessWidget {
   const HeaderBar({
     super.key,
     required this.s,
     this.onBack,
     this.backLabel,
-    this.onToggleLang,
+    this.iconBack = false,
+    this.lang,
+    this.onLang,
   });
   final S s;
   final VoidCallback? onBack;
   final String? backLabel;
-  final VoidCallback? onToggleLang;
+
+  /// زر رجوع بسهم فقط (عند ازدحام الشريط باختيار اللغة).
+  final bool iconBack;
+  final AppLang? lang;
+  final ValueChanged<AppLang>? onLang;
 
   @override
   Widget build(BuildContext context) {
@@ -116,54 +123,40 @@ class HeaderBar extends StatelessWidget {
         children: [
           Image.asset('assets/images/logo.png', height: context.d(88)),
           const Spacer(),
-          if (onBack != null)
+          if (lang != null && onLang != null)
+            LanguageSelector(current: lang!, onChanged: onLang!, compact: true),
+          if (onBack != null) ...[
+            if (iconBack) SizedBox(width: context.d(14)),
             Pressable(
               key: const Key('back'),
               onTap: onBack,
               child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: context.d(40),
-                  vertical: context.d(22),
-                ),
+                padding: iconBack
+                    ? EdgeInsets.all(context.d(14))
+                    : EdgeInsets.symmetric(
+                        horizontal: context.d(40),
+                        vertical: context.d(22),
+                      ),
                 decoration: BoxDecoration(
                   color: HColors.tealLight,
                   borderRadius: BorderRadius.circular(context.d(20)),
                 ),
-                child: Text(
-                  backLabel ?? s.back,
-                  style: TextStyle(
-                    fontSize: context.d(32),
-                    color: HColors.teal,
-                  ),
-                ),
-              ),
-            ),
-          if (onToggleLang != null)
-            Pressable(
-              key: const Key('lang'),
-              onTap: onToggleLang,
-              child: Padding(
-                padding: EdgeInsets.all(context.d(14)),
-                child: Row(
-                  children: [
-                    Text(
-                      s.langName,
-                      style: TextStyle(
-                        fontSize: context.d(34),
-                        fontWeight: FontWeight.w700,
+                child: iconBack
+                    ? Icon(
+                        Icons.arrow_back_rounded,
+                        size: context.d(36),
                         color: HColors.teal,
+                      )
+                    : Text(
+                        backLabel ?? s.back,
+                        style: TextStyle(
+                          fontSize: context.d(32),
+                          color: HColors.teal,
+                        ),
                       ),
-                    ),
-                    SizedBox(width: context.d(14)),
-                    Icon(
-                      Icons.translate,
-                      size: context.d(46),
-                      color: HColors.teal,
-                    ),
-                  ],
-                ),
               ),
             ),
+          ],
         ],
       ),
     );
