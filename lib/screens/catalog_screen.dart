@@ -47,13 +47,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     return Scaffold(
       body: Column(
         children: [
-          HeaderBar(
-            s: s,
-            iconBack: true,
-            onBack: () => Navigator.of(context).pop(),
-            lang: st.lang,
-            onLang: st.setLang,
-          ),
+          HeaderBar(s: s, lang: st.lang, onLang: st.setLang),
           Expanded(
             child: c == null
                 ? const SizedBox.shrink()
@@ -66,6 +60,44 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     ),
                     child: Column(
                       children: [
+                        Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Pressable(
+                            key: const Key('back'),
+                            onTap: () => Navigator.of(context).pop(),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: context.d(40),
+                                vertical: context.d(22),
+                              ),
+                              decoration: BoxDecoration(
+                                color: HColors.tealLight,
+                                borderRadius: BorderRadius.circular(
+                                  context.r(20),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.arrow_back_rounded,
+                                    size: context.d(36),
+                                    color: HColors.teal,
+                                  ),
+                                  SizedBox(width: context.d(14)),
+                                  Text(
+                                    s.back,
+                                    style: TextStyle(
+                                      fontSize: context.d(32),
+                                      color: HColors.teal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: context.d(28)),
                         FadeSlideIn(
                           child: _Banner(
                             catalog: c,
