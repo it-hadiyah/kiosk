@@ -121,10 +121,10 @@ class _PaymentScreenState extends State<PaymentScreen>
       child: Scaffold(
         body: Column(
           children: [
-            HeaderBar(
-              s: s,
-              onBack: done ? _finish : () => Navigator.of(context).pop(),
-              backLabel: done ? s.back : s.cancel,
+            HeaderBar(s: s),
+            BackRow(
+              label: done ? s.back : s.cancel,
+              onTap: done ? _finish : () => Navigator.of(context).pop(),
             ),
             Expanded(
               child: Padding(

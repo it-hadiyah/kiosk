@@ -105,7 +105,8 @@ class _AmountScreenState extends State<AmountScreen> {
     return Scaffold(
       body: Column(
         children: [
-          HeaderBar(s: s, onBack: () => Navigator.of(context).pop()),
+          HeaderBar(s: s),
+          BackRow(label: s.back, onTap: () => Navigator.of(context).pop()),
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(

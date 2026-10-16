@@ -95,21 +95,8 @@ class FadeSlideIn extends StatelessWidget {
 
 /// الشريط العلوي: الشعار + (اختيار اللغة | رجوع/إلغاء).
 class HeaderBar extends StatelessWidget {
-  const HeaderBar({
-    super.key,
-    required this.s,
-    this.onBack,
-    this.backLabel,
-    this.iconBack = false,
-    this.lang,
-    this.onLang,
-  });
+  const HeaderBar({super.key, required this.s, this.lang, this.onLang});
   final S s;
-  final VoidCallback? onBack;
-  final String? backLabel;
-
-  /// زر رجوع بسهم فقط (عند ازدحام الشريط باختيار اللغة).
-  final bool iconBack;
   final AppLang? lang;
   final ValueChanged<AppLang>? onLang;
 
@@ -125,39 +112,61 @@ class HeaderBar extends StatelessWidget {
           const Spacer(),
           if (lang != null && onLang != null)
             LanguageSelector(current: lang!, onChanged: onLang!, compact: true),
-          if (onBack != null) ...[
-            if (iconBack) SizedBox(width: context.d(14)),
-            Pressable(
-              key: const Key('back'),
-              onTap: onBack,
-              child: Container(
-                padding: iconBack
-                    ? EdgeInsets.all(context.d(14))
-                    : EdgeInsets.symmetric(
-                        horizontal: context.d(40),
-                        vertical: context.d(22),
-                      ),
-                decoration: BoxDecoration(
-                  color: HColors.tealLight,
-                  borderRadius: BorderRadius.circular(context.r(20)),
-                ),
-                child: iconBack
-                    ? Icon(
-                        Icons.arrow_back_rounded,
-                        size: context.d(36),
-                        color: HColors.teal,
-                      )
-                    : Text(
-                        backLabel ?? s.back,
-                        style: TextStyle(
-                          fontSize: context.d(32),
-                          color: HColors.teal,
-                        ),
-                      ),
-              ),
-            ),
-          ],
         ],
+      ),
+    );
+  }
+}
+
+/// زر الرجوع الموحّد: صف تحت الشريط العلوي في بداية السطر، بنفس المكان في كل الصفحات.
+class BackRow extends StatelessWidget {
+  const BackRow({super.key, required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        context.d(53),
+        context.d(28),
+        context.d(53),
+        0,
+      ),
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Pressable(
+          key: const Key('back'),
+          onTap: onTap,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: context.d(40),
+              vertical: context.d(22),
+            ),
+            decoration: BoxDecoration(
+              color: HColors.tealLight,
+              borderRadius: BorderRadius.circular(context.r(20)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.arrow_back_rounded,
+                  size: context.d(36),
+                  color: HColors.teal,
+                ),
+                SizedBox(width: context.d(14)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: context.d(32),
+                    color: HColors.teal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

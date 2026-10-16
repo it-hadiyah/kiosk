@@ -566,6 +566,44 @@ void main() {
       },
     );
 
+    testWidgets(
+      'back button sits in the same place on catalog, amount and payment',
+      (t) async {
+        await start(
+          t,
+          _data(
+            programs: [_prog('a')],
+            catalogs: [
+              {
+                'id': 'c1',
+                'title': {'ar': 'كتالوج'},
+                'items': [
+                  {'programId': 'a', 'size': 'small'},
+                ],
+              },
+            ],
+            home: [
+              {'type': 'catalog', 'id': 'c1', 'size': 'large'},
+            ],
+          ),
+        );
+        expect(find.byKey(const Key('back')), findsNothing); // صفحة المشاريع
+        await t.tap(find.byKey(const Key('catalog_c1')));
+        await t.pumpAndSettle();
+        final onCatalog = t.getTopRight(find.byKey(const Key('back')));
+        await t.tap(find.byKey(const Key('program_a')));
+        await t.pumpAndSettle();
+        expect(t.getTopRight(find.byKey(const Key('back'))), onCatalog);
+        await t.tap(find.byKey(const Key('amount_50')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(const Key('continue_pay')));
+        await t.pump();
+        await t.pump(const Duration(milliseconds: 600));
+        expect(t.getTopRight(find.byKey(const Key('back'))), onCatalog);
+        await t.pump(const Duration(seconds: 12));
+      },
+    );
+
     testWidgets('free popup can be closed without donating', (t) async {
       await start(
         t,
