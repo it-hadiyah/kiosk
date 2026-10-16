@@ -52,13 +52,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     return Scaffold(
       body: Column(
         children: [
-          HeaderBar(
-            s: s,
-            iconBack: true,
-            onBack: () => Navigator.of(context).pop(),
-            lang: st.lang,
-            onLang: st.setLang,
-          ),
+          HeaderBar(s: s, lang: st.lang, onLang: st.setLang),
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(

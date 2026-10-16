@@ -74,10 +74,8 @@ void main() {
     await t.tap(find.byKey(const Key('lang_ur')));
     await _wait(t, 500);
     expect(find.text('آپ کا عطیہ فرق پیدا کرتا ہے'), findsOneWidget);
-    // رجوع لصفحة البداية
-    await t.tap(find.byKey(const Key('back')));
-    await _wait(t);
-    expect(find.byKey(const Key('welcome_donate')), findsOneWidget);
+    // أول صفحة بعد الترحيب: بلا زر رجوع
+    expect(find.byKey(const Key('back')), findsNothing);
   });
 
   testWidgets(
@@ -109,6 +107,8 @@ void main() {
       await t.pump(const Duration(seconds: 7));
       await t.pump(const Duration(milliseconds: 600));
       expect(find.byKey(const Key('success')), findsOneWidget);
+      // زر الرجوع موجود حتى في شاشة النجاح ويعيد للبداية
+      expect(find.byKey(const Key('back')), findsOneWidget);
 
       await t.tap(find.byKey(const Key('done')));
       await _wait(t, 800);

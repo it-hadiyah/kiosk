@@ -123,8 +123,8 @@ class _PaymentScreenState extends State<PaymentScreen>
           children: [
             HeaderBar(
               s: s,
-              onBack: done ? null : () => Navigator.of(context).pop(),
-              backLabel: s.cancel,
+              onBack: done ? _finish : () => Navigator.of(context).pop(),
+              backLabel: done ? s.back : s.cancel,
             ),
             Expanded(
               child: Padding(
