@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../data/catalog_service.dart';
 import '../data/models.dart';
 import '../l10n/strings.dart';
 import '../screens/amount_screen.dart';
@@ -68,11 +67,10 @@ class _AmountPopupState extends State<AmountPopup> {
     final s = S(lang);
     final title = widget.program.popupTitle.of(lang);
     final hint = widget.program.popupHint.of(lang);
-    final bg = widget.program.popupImage;
-    final hasBg = bg.isNotEmpty;
+    final canDonate = _amount >= 1;
     return Dialog(
       key: const Key('amount_popup'),
-      backgroundColor: Colors.white,
+      backgroundColor: HColors.ink,
       clipBehavior: Clip.antiAlias,
       insetPadding: EdgeInsets.symmetric(
         horizontal: context.d(70),
@@ -83,105 +81,96 @@ class _AmountPopupState extends State<AmountPopup> {
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: context.d(900)),
-        child: Stack(
-          children: [
-            if (hasBg)
-              Positioned.fill(
-                child: Stack(
-                  fit: StackFit.expand,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(context.d(44)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title.isNotEmpty ? title : widget.program.title.of(lang),
+                key: const Key('popup_title'),
+                style: TextStyle(
+                  fontSize: context.d(52),
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: context.d(36)),
+              Container(
+                width: double.infinity,
+                height: context.d(120),
+                padding: EdgeInsets.symmetric(horizontal: context.d(32)),
+                decoration: BoxDecoration(
+                  color: const Color(0x1FFFFFFF),
+                  borderRadius: BorderRadius.circular(context.r(28)),
+                  border: Border.all(
+                    color: canDonate ? Colors.white : const Color(0x66FFFFFF),
+                    width: context.d(canDonate ? 3 : 2),
+                  ),
+                ),
+                child: Row(
                   children: [
-                    AppImage(service: widget.state.catalog, src: bg),
-                    const ColoredBox(color: Color(0x80103A36)),
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          canDonate
+                              ? '$_amount'
+                              : (hint.isNotEmpty ? hint : s.amountLabel),
+                          key: const Key('popup_amount'),
+                          style: TextStyle(
+                            fontSize: context.d(canDonate ? 60 : 40),
+                            fontWeight: canDonate
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                            color: canDonate
+                                ? Colors.white
+                                : const Color(0xAAFFFFFF),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      s.sar,
+                      style: TextStyle(
+                        fontSize: context.d(34),
+                        color: const Color(0xCCFFFFFF),
+                      ),
+                    ),
                   ],
                 ),
               ),
-            SingleChildScrollView(
-              padding: EdgeInsets.all(context.d(44)),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title.isNotEmpty ? title : widget.program.title.of(lang),
-                    key: const Key('popup_title'),
+              SizedBox(height: context.d(20)),
+              NumPad(onDigit: _digit, onBackspace: _backspace, glass: true),
+              SizedBox(height: context.d(24)),
+              Pressable(
+                key: const Key('popup_donate'),
+                onTap: canDonate
+                    ? () => Navigator.of(context).pop(_amount)
+                    : null,
+                scale: 0.98,
+                child: AnimatedContainer(
+                  duration: context.ms(200),
+                  height: context.d(120),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: canDonate ? Colors.white : const Color(0x33FFFFFF),
+                    borderRadius: BorderRadius.circular(context.r(32)),
+                  ),
+                  child: Text(
+                    s.continueToPay,
                     style: TextStyle(
-                      fontSize: context.d(52),
+                      fontSize: context.d(40),
                       fontWeight: FontWeight.w700,
-                      color: hasBg ? Colors.white : HColors.tealDark,
+                      color: canDonate ? HColors.ink : const Color(0x80FFFFFF),
                     ),
                   ),
-                  SizedBox(height: context.d(36)),
-                  Container(
-                    width: double.infinity,
-                    height: context.d(120),
-                    padding: EdgeInsets.symmetric(horizontal: context.d(32)),
-                    decoration: BoxDecoration(
-                      color: hasBg ? const Color(0x33FFFFFF) : Colors.white,
-                      borderRadius: BorderRadius.circular(context.r(28)),
-                      border: Border.all(
-                        color: hasBg
-                            ? (_amount == 0
-                                  ? const Color(0x99FFFFFF)
-                                  : Colors.white)
-                            : (_amount == 0 ? HColors.border : HColors.teal),
-                        width: context.d(_amount == 0 ? 2 : 3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: AlignmentDirectional.centerStart,
-                            child: Text(
-                              _amount == 0
-                                  ? (hint.isNotEmpty ? hint : s.amountLabel)
-                                  : '$_amount',
-                              key: const Key('popup_amount'),
-                              style: TextStyle(
-                                fontSize: context.d(_amount == 0 ? 40 : 60),
-                                fontWeight: _amount == 0
-                                    ? FontWeight.w400
-                                    : FontWeight.w700,
-                                color: hasBg
-                                    ? (_amount == 0
-                                          ? const Color(0xCCFFFFFF)
-                                          : Colors.white)
-                                    : (_amount == 0
-                                          ? const Color(0xFFB8C4C2)
-                                          : HColors.teal),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Text(
-                          s.sar,
-                          style: TextStyle(
-                            fontSize: context.d(34),
-                            color: hasBg ? Colors.white : HColors.muted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: context.d(20)),
-                  NumPad(
-                    onDigit: _digit,
-                    onBackspace: _backspace,
-                    glass: hasBg,
-                  ),
-                  SizedBox(height: context.d(20)),
-                  PrimaryButton(
-                    key: const Key('popup_donate'),
-                    label: s.continueToPay,
-                    onPressed: _amount >= 1
-                        ? () => Navigator.of(context).pop(_amount)
-                        : null,
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

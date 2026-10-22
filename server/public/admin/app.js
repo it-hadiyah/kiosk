@@ -809,7 +809,7 @@ function programEditorHtml() {
       <label class="check"><input type="checkbox" data-ctx="prog" data-f="allowQuantity" data-rerender ${p.allowQuantity ? 'checked' : ''}><span>السماح للمتبرع باختيار الكمية (عدّاد)</span></label>
       ${p.allowQuantity ? numField('prog', 'maxQuantity', 'أقصى كمية', p.maxQuantity, { min: 1, max: 999 }) : ''}`;
   } else if (p.kind === 'free') {
-    cond = `<section class="card"><h3>نافذة المبلغ</h3><p class="hint">تظهر عند ضغط المتبرع على البرنامج: عبارة في الأعلى وحقل لكتابة المبلغ ثم «متابعة للدفع».</p>${imagePicker('popup', { label: 'صورة خلفية النافذة (اختياري)' })}${locFields('prog', 'popupTitle', 'العبارة العلوية (مثال: تصدّق بما تجود به نفسك)')}${locFields('prog', 'popupHint', 'نص حقل المبلغ (مثال: مبلغ الصدقة)')}</section>`;
+    cond = `<section class="card"><h3>نافذة المبلغ</h3><p class="hint">تظهر عند ضغط المتبرع على البرنامج: عبارة في الأعلى وحقل لكتابة المبلغ ثم «متابعة للدفع».</p>${locFields('prog', 'popupTitle', 'العبارة العلوية (مثال: تصدّق بما تجود به نفسك)')}${locFields('prog', 'popupHint', 'نص حقل المبلغ (مثال: مبلغ الصدقة)')}</section>`;
   } else if (p.kind === 'presets') {
     cond = chipsEditor('prog:presets', 'المبالغ المحددة', 'إذا تركتها فارغة تُستخدم المبالغ السريعة العامة: ' + C().settings.quickAmounts.map(nf).join('، '));
   } else {
