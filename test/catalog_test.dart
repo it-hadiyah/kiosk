@@ -687,8 +687,61 @@ void main() {
       ]);
       expect(events[1]['programId'], 'z');
       expect(events[2]['amount'], 40);
+      expect(events[4]['amount'], 40);
+      expect(events[4].containsKey('catalogId'), isFalse);
       expect(events.every((e) => !e.containsKey('name')), isTrue);
     });
+
+    testWidgets(
+      'demo analytics: catalog visits and donations carry the catalog id and amount',
+      (t) async {
+        size(t);
+        final events = <Map<String, Object?>>[];
+        final svc =
+            CatalogService.fixed(
+                _data(
+                  programs: [_prog('a')],
+                  catalogs: [
+                    {
+                      'id': 'c1',
+                      'title': {'ar': 'كتالوج'},
+                      'items': [
+                        {'programId': 'a', 'size': 'small'},
+                      ],
+                    },
+                  ],
+                  home: [
+                    {'type': 'catalog', 'id': 'c1', 'size': 'large'},
+                  ],
+                ),
+              )
+              ..analytics = Analytics(
+                'http://x',
+                sender: (u, b) async => events.add(b),
+              );
+        await t.pumpWidget(KioskApp(catalog: svc));
+        await wait(t);
+        await t.tap(find.byKey(const Key('welcome_donate')));
+        await wait(t);
+        await t.tap(find.byKey(const Key('catalog_c1')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(const Key('program_a')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(const Key('amount_50')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(const Key('continue_pay')));
+        await t.pump();
+        for (var i = 0; i < 20; i++) {
+          await t.pump(const Duration(seconds: 1));
+        }
+        final byType = {for (final e in events) e['type']: e};
+        expect(byType['catalog_opened']!['catalogId'], 'c1');
+        expect(byType['program_selected']!['catalogId'], 'c1');
+        expect(byType['program_selected']!['programId'], 'a');
+        expect(byType['payment_completed']!['catalogId'], 'c1');
+        expect(byType['payment_completed']!['amount'], 50);
+      },
+    );
 
     testWidgets('demo analytics: idle timeout mid-session logs abandonment', (
       t,

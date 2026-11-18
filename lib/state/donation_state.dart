@@ -14,6 +14,9 @@ class DonationState extends ChangeNotifier {
   Program? program;
   int amount = 0;
 
+  /// الكتالوج الذي فُتح منه البرنامج الحالي (null = من الرئيسية مباشرة).
+  String? catalogId;
+
   /// جلسة مفتوحة (بدأت بالضغط على «تبرع الآن» ولم تكتمل).
   bool sessionOpen = false;
   DateTime? _sessionAt;
@@ -36,8 +39,16 @@ class DonationState extends ChangeNotifier {
     catalog.analytics.log('session_start', lang: lang.code);
   }
 
-  void trackProgram(Program p) =>
-      catalog.analytics.log('program_selected', programId: p.id);
+  void trackCatalog(String id) {
+    catalogId = id;
+    catalog.analytics.log('catalog_opened', catalogId: id);
+  }
+
+  void trackProgram(Program p) => catalog.analytics.log(
+    'program_selected',
+    programId: p.id,
+    catalogId: catalogId,
+  );
 
   void trackAmount(int a) =>
       catalog.analytics.log('amount_chosen', programId: program?.id, amount: a);
@@ -51,6 +62,8 @@ class DonationState extends ChangeNotifier {
     catalog.analytics.log(
       'payment_completed',
       programId: program?.id,
+      catalogId: catalogId,
+      amount: amount > 0 ? amount : null,
       durationMs: ms,
     );
     sessionOpen = false;
@@ -67,6 +80,7 @@ class DonationState extends ChangeNotifier {
     lang = AppLang.ar;
     program = null;
     amount = 0;
+    catalogId = null;
     sessionOpen = false;
     notifyListeners();
   }

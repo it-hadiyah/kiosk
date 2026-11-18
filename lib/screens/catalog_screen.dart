@@ -26,6 +26,21 @@ class CatalogScreen extends StatefulWidget {
 class _CatalogScreenState extends State<CatalogScreen> {
   bool _navigating = false;
 
+  @override
+  void initState() {
+    super.initState();
+    widget.state.trackCatalog(widget.catalogId);
+  }
+
+  @override
+  void dispose() {
+    // خرج الزائر من الكتالوج: البرامج التالية ليست منه
+    if (widget.state.catalogId == widget.catalogId) {
+      widget.state.catalogId = null;
+    }
+    super.dispose();
+  }
+
   Future<void> _open(Tile t) async {
     if (_navigating || t.program == null) return;
     _navigating = true;

@@ -41,6 +41,7 @@ class Analytics {
   void log(
     String type, {
     String? programId,
+    String? catalogId,
     int? amount,
     int? durationMs,
     String? lang,
@@ -50,6 +51,7 @@ class Analytics {
       _send(Uri.parse('$baseUrl/api/events'), {
         'type': type,
         'programId': ?programId,
+        'catalogId': ?catalogId,
         'amount': ?amount,
         'durationMs': ?durationMs,
         'lang': ?lang,
