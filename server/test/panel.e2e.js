@@ -326,9 +326,48 @@ async function main() {
     await tab('programs'); await page.click('.pcard[data-id=quran] [data-act=edit-prog] >> nth=-1');
     await page.check('[data-feat-place]');
     ok(await page.evaluate(() => C().featured.items.some((x) => x.id === 'quran')), 'program editor checkbox adds to featured');
-    await page.click('[data-act=del]'); await confirmYes(); await page.waitForFunction(() => !C().programs.some((p) => p.id === 'quran') && !state.dirty && !state.saving);
-    ok(await page.evaluate(() => !C().featured.items.some((x) => x.id === 'quran')), 'deleting a program removes it from featured.items');
-    ok(await page.evaluate(() => !C().home.some((h) => h.id === 'quran') && !C().catalogs.some((c) => c.items.some((i) => i.programId === 'quran'))), `deleting program removes placements (was on home: ${hadQuran})`);
+    // الحذف الآمن: برنامج مستخدم لا يُحذف، يُعرض عليه الأرشفة
+    await page.click('[data-act=del]');
+    ok((await page.textContent('#dlgMsg')).includes('لا يمكن حذف'), 'deleting a used program is refused with the places it is used in');
+    await confirmYes();
+    await page.waitForFunction(() => findProg('quran') && findProg('quran').archived === true && findProg('quran').active === false && !ui.edit);
+    ok(await page.evaluate(() => C().programs.some((p) => p.id === 'quran')), 'used program is archived, not deleted');
+    await page.waitForFunction(() => !state.dirty && !state.saving);
+    ok(!(await page.$('.pcard[data-id=quran]')), 'archived program is hidden from the default list');
+    await page.click('[data-act=pf-status][data-v=archived]');
+    await page.waitForSelector('.pcard[data-id=quran]');
+    ok((await page.textContent('.pcard[data-id=quran]')).includes('مؤرشف'), 'archived filter shows the archived program');
+    await page.click('.pcard[data-id=quran] [data-act=edit-prog] >> nth=-1'); await page.waitForSelector('[data-act=arch-toggle]');
+    await page.click('[data-act=arch-toggle]');
+    ok(await page.evaluate(() => findProg('quran').archived === false), 'program restored from the archive');
+    await page.click('#drawer [data-act=close-editor]'); await page.waitForFunction(() => !ui.edit);
+    await page.click('[data-act=pf-status][data-v=visible]');
+    // حذف نهائي لبرنامج غير مستخدم
+    await page.evaluate(() => { const q = newProgram(); q.id = 'tmp-del'; q.title.ar = 'مؤقت للحذف'; C().programs.push(q); markDirty(); render(); });
+    await tab('programs');
+    await page.click('.pcard[data-id=tmp-del] [data-act=edit-prog] >> nth=-1');
+    await page.click('[data-act=del]'); await confirmYes();
+    await page.waitForFunction(() => !C().programs.some((p) => p.id === 'tmp-del') && !state.dirty && !state.saving);
+    ok(true, 'an unused program can be deleted permanently');
+    // كتالوج مستخدم في الرئيسية لا يُحذف أيضاً
+    const usedCat = await page.evaluate(() => (C().home.find((h) => h.type === 'catalog') || {}).id);
+    if (usedCat) {
+      await tab('catalogs'); await page.click(`[data-act=edit-cat][data-id="${usedCat}"] >> nth=-1`); await page.click('[data-act=del]');
+      ok((await page.textContent('#dlgMsg')).includes('لا يمكن حذف'), 'a catalog placed on the home page cannot be deleted');
+      await page.click('#dlgNo'); await page.click('#drawer [data-act=close-editor]'); await page.waitForFunction(() => !ui.edit);
+    }
+    // معاينة المنشور مقابل المسودة + تجاهل التعديلات غير المنشورة
+    await tab('home');
+    await page.click('[data-act=pv-src][data-v=live]');
+    await page.waitForFunction(() => document.querySelector('[data-region=homePv]').textContent.includes('للقراءة فقط'));
+    ok(true, 'home preview can show the published version (read-only)');
+    await page.click('[data-act=pv-src][data-v=draft]');
+    await page.evaluate(() => { findProg('water').title.ar = 'عنوان مؤقت للتجاهل'; markDirty(); });
+    await saved();
+    await page.waitForSelector('[data-act=discard-draft]');
+    await page.click('[data-act=discard-draft]'); await confirmYes();
+    await page.waitForFunction(() => findProg('water').title.ar !== 'عنوان مؤقت للتجاهل' && !state.hasUnpublished && !state.dirty);
+    ok(true, 'unpublished draft changes can be discarded (back to the published content)');
 
     /* ---------- لقطات الهاتف + الوضع الداكن ---------- */
     console.log('== screenshots');

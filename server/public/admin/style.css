@@ -550,3 +550,6 @@ details.details[open] > summary { margin-bottom: var(--s3); }
 .chartwrap { position: relative; padding-inline-start: 0; }
 .chmax { position: absolute; top: -2px; inset-inline-end: 0; font-size: 11px; color: var(--muted); }
 @media (max-width: 560px) { .funnel li { grid-template-columns: 1fr 56px; } .funnel .fbar { grid-column: 1 / -1; order: 3; } .funnel li small { display: none; } }
+
+/* ===== محرر المحتوى ===== */
+.pv-src { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; justify-content: center; width: 100%; }

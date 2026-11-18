@@ -556,7 +556,7 @@ function listRows(list, arr) {
     return `<li class="row ${o.active ? '' : 'dim'}" data-dnd="${list}" data-i="${i}" draggable="true" data-key="${esc(info.key)}">
       <span class="grip" aria-hidden="true">${ic('grip')}</span>
       <div class="thumb">${imgTag(o.image, o.imageAlign)}</div>
-      <div class="row-t"><strong>${esc(tt(o))}</strong><div class="row-sub">${sub}${o.active ? '' : badge('غير مفعّل', 'off')}</div></div>
+      <div class="row-t"><strong>${esc(tt(o))}</strong><div class="row-sub">${sub}${o.active ? '' : badge('غير مفعّل', 'off')}${typeof itemBadges === 'function' ? itemBadges(info) : ''}</div></div>
       ${list === 'feat' ? '' : sizeSeg(`data-act="size" data-list="${list}" data-i="${i}"`, entry.size)}
       <div class="row-btns">
         <button type="button" class="icon-btn" data-act="move" data-list="${list}" data-i="${i}" data-d="-1" aria-label="نقل «${esc(tt(o))}» للأعلى" ${i === 0 ? 'disabled' : ''}>${ic('up')}</button>
@@ -638,7 +638,7 @@ function placementChips(p) {
 }
 regions.progList = () => {
   const q = ui.q.trim().toLowerCase();
-  const list = C().programs.filter((p) => !q || (LANGS.map((l) => p.title[l.k]).join(' ') + ' ' + p.id).toLowerCase().includes(q));
+  const list = C().programs.filter((p) => (typeof progFilterOk !== 'function' || progFilterOk(p)) && (!q || (LANGS.map((l) => p.title[l.k]).join(' ') + ' ' + p.id).toLowerCase().includes(q)));
   if (!C().programs.length) return `<div class="empty big">${ic('grid')}<strong>لا توجد برامج بعد</strong><p>ابدأ بإنشاء أول برنامج.</p><button class="btn primary" type="button" data-act="new-prog">${ic('plus')}برنامج جديد</button></div>`;
   if (!list.length) return `<div class="empty">${ic('search')}<strong>لا نتائج مطابقة</strong><p>جرّب كلمة أخرى.</p></div>`;
   return `<div class="cards">${list.map((p) => `<article class="pcard ${p.active ? '' : 'dim'}" data-id="${esc(p.id)}">
@@ -655,8 +655,10 @@ function viewCatalogs() {
     <button class="btn primary" type="button" data-act="new-cat">${ic('plus')}كتالوج جديد</button></div><div data-region="catList"></div>`;
 }
 regions.catList = () => {
+  const catsShown = C().catalogs.filter((c) => typeof catFilterOk !== 'function' || catFilterOk(c));
+  if (C().catalogs.length && !catsShown.length) return `<div class="empty">${ic('search')}<strong>لا كتالوجات بهذه الحالة</strong><p>غيّر الفلتر أعلاه.</p></div>`;
   if (!C().catalogs.length) return `<div class="empty big">${ic('folder')}<strong>لا توجد كتالوجات</strong><p>أنشئ كتالوجاً لتجمّع فيه عدة برامج في بطاقة واحدة.</p><button class="btn primary" type="button" data-act="new-cat">${ic('plus')}كتالوج جديد</button></div>`;
-  return `<div class="cards">${C().catalogs.map((c) => {
+  return `<div class="cards">${catsShown.map((c) => {
     const h = C().home.find((x) => x.type === 'catalog' && x.id === c.id);
     return `<article class="pcard ${c.active ? '' : 'dim'}"><div class="pc-img">${imgTag(c.image, c.imageAlign)}</div>
     <div class="pc-body"><div class="pc-top"><h3><button type="button" class="linkbtn" data-act="edit-cat" data-id="${esc(c.id)}">${esc(tt(c))}</button></h3>${badge(c.items.length + ' برامج', 'cat')}</div>

@@ -53,7 +53,7 @@ async function onBoot() {
     new MutationObserver(() => lockUi()).observe($('#main'), { childList: true, subtree: true });
   }
 }
-const KEEP = '.navb,[data-act="close-editor"],[data-act="tab"],[data-act="edit-prog"],[data-act="edit-cat"],[data-act="pv-lang"],[data-act="pv-dev"],[data-act="feat-step"],[data-act="feat-go"],[data-q],[data-mq],[data-act="export"],[data-act="ov-open"],[data-act="media-copy"],[data-act="ov-refresh"],[data-act="alert-open"],[data-act="alerts-all"],[data-act="open-device"],[data-act="media-filter"],[data-act="audit-refresh"],[data-act="dismiss-err"]';
+const KEEP = '.navb,[data-act="close-editor"],[data-act="tab"],[data-act="edit-prog"],[data-act="edit-cat"],[data-act="pv-lang"],[data-act="pv-dev"],[data-act="feat-step"],[data-act="feat-go"],[data-q],[data-mq],[data-act="export"],[data-act="ov-open"],[data-act="media-copy"],[data-act="ov-refresh"],[data-act="pv-src"],[data-act="pf-status"],[data-act="cf-status"],[data-act="alert-open"],[data-act="alerts-all"],[data-act="open-device"],[data-act="media-filter"],[data-act="audit-refresh"],[data-act="dismiss-err"]';
 function lockUi() {
   if (!can('edit')) {
     $$('#view input,#view select,#view textarea,#view button,#drawerBody input,#drawerBody select,#drawerBody textarea,#drawerBody button,#drawerFoot button').forEach((el) => { if (!el.matches(KEEP) && !el.disabled) el.disabled = true; });
@@ -126,7 +126,7 @@ regions.mediaGrid = () => {
 };
 async function loadMedia() {
   try { ui.media = await backend.media(); ui.mediaErr = ''; } catch (e) { ui.media = null; ui.mediaErr = e.message || 'تعذّر تحميل الوسائط'; }
-  refreshRegions();
+  ui.forceRegions = true; refreshRegions(); ui.forceRegions = false;
 }
 
 /* نافذة «اختيار من المكتبة» داخل منتقي الصور */
@@ -203,6 +203,7 @@ document.addEventListener('change', async (ev) => {
 /* المحرر المباشر: اضغط أي بطاقة في المعاينة لفتح محررها */
 document.addEventListener('click', (ev) => {
   const t = ev.target.closest('.phone [data-tile]'); if (!t || ev.target.closest('[data-act]') || ui.edit) return;
+  if (ui.pvSrc === 'live') { toast('هذه معاينة النسخة المنشورة (للقراءة فقط) — بدّل إلى «المسودة» للتعديل', 'warn'); return; }
   const [type, id] = t.dataset.tile.split(':');
   ev.preventDefault(); openEditor(type === 'catalog' ? 'cat' : 'prog', id);
 });
