@@ -84,12 +84,27 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           ),
                         ),
                         SizedBox(height: context.d(40)),
-                        TileGrid(
-                          tiles: tiles,
-                          lang: st.lang,
-                          service: st.catalog,
-                          onOpen: _open,
-                        ),
+                        if (tiles.isEmpty)
+                          Padding(
+                            padding: EdgeInsets.only(top: context.d(80)),
+                            child: Center(
+                              child: Text(
+                                s.emptyPrograms,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: context.d(48),
+                                  color: HColors.muted,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          TileGrid(
+                            tiles: tiles,
+                            lang: st.lang,
+                            service: st.catalog,
+                            onOpen: _open,
+                          ),
                       ],
                     ),
                   ),

@@ -73,6 +73,12 @@ class S {
     'Image unavailable',
     'تصویر دستیاب نہیں',
   );
+  String get emptyPrograms => _t(
+    'لا توجد برامج متاحة حالياً',
+    'Aucun programme disponible pour le moment',
+    'No programs are available right now',
+    'اس وقت کوئی پروگرام دستیاب نہیں',
+  );
   String get amountLabel => _t('المبلغ', 'Montant', 'Amount', 'رقم');
   String get continueToPay => _t(
     'المتابعة للدفع',

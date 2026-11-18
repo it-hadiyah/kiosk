@@ -110,9 +110,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                       padding: EdgeInsets.only(top: context.d(120)),
                       child: Center(
                         child: Text(
-                          '—',
+                          s.emptyPrograms,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: context.d(80),
+                            fontSize: context.d(48),
                             color: HColors.muted,
                           ),
                         ),
