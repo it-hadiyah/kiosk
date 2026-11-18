@@ -904,8 +904,14 @@ function validateEditorUI() {
 /* =====================================================================
    11) العرض العام (Router) والمناطق
    ===================================================================== */
+const NAV_GROUPS = [['التشغيل', ['overview', 'dashboard', 'devices']], ['المحتوى', ['home', 'programs', 'catalogs', 'media']], ['النظام', ['settings', 'publish']]];
 function renderNav() {
-  $('#nav').innerHTML = TABS.map((t) => `<button type="button" class="navb" data-act="tab" data-tab="${t.k}" ${ui.tab === t.k ? 'aria-current="page"' : ''}>${ic(t.icon)}<span>${t.label}</span></button>`).join('');
+  const by = new Map(TABS.map((t) => [t.k, t]));
+  const badge = (k) => { const n = typeof navBadge === 'function' ? navBadge(k) : null; return n ? `<span class="nb-badge ${n.cls || ''}" aria-label="${esc(n.label || '')}">${esc(n.text)}</span>` : ''; };
+  const btn = (t) => `<button type="button" class="navb" data-act="tab" data-tab="${t.k}" ${ui.tab === t.k ? 'aria-current="page"' : ''}>${ic(t.icon)}<span>${t.label}</span>${badge(t.k)}</button>`;
+  const used = new Set();
+  const html = NAV_GROUPS.map(([g, keys]) => { const items = keys.map((k) => by.get(k)).filter(Boolean); items.forEach((t) => used.add(t.k)); return items.length ? `<div class="nav-g">${g}</div>` + items.map(btn).join('') : ''; }).join('');
+  $('#nav').innerHTML = html + TABS.filter((t) => !used.has(t.k)).map(btn).join('');
 }
 function render(full = true) {
   renderNav(); updateChrome();

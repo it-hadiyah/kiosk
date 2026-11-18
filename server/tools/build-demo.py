@@ -10,7 +10,7 @@ admin = root / 'public/admin'
 html = (admin / 'index.html').read_text(encoding='utf-8')
 css = (admin / 'style.css').read_text(encoding='utf-8')
 js = (admin / 'app.js').read_text(encoding='utf-8')
-extras = (admin / 'extras.js').read_text(encoding='utf-8')
+extras = '\n'.join((admin / f).read_text(encoding='utf-8') for f in re.findall(r'<script src="((?!app)[\w.]+\.js)"', html))
 demo = (root / 'tools/demo-backend.js').read_text(encoding='utf-8')
 validate = (root / 'validate.js').read_text(encoding='utf-8')
 seed = json.loads((root / 'seed/catalog.json').read_text(encoding='utf-8'))
