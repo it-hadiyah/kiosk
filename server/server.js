@@ -37,10 +37,20 @@ const ROLE_PASSWORDS = [
 const ROLE_CAN = {
   viewer: new Set(['read']),
   editor: new Set(['read', 'edit', 'upload']),
-  manager: new Set(['read', 'edit', 'upload', 'publish', 'settings', 'media_delete', 'audit', 'stats']),
-  super: new Set(['read', 'edit', 'upload', 'publish', 'settings', 'media_delete', 'audit', 'stats']),
+  manager: new Set(['read', 'edit', 'upload', 'publish', 'settings', 'media_delete', 'audit', 'stats', 'devices']),
+  super: new Set(['read', 'edit', 'upload', 'publish', 'settings', 'media_delete', 'audit', 'stats', 'devices']),
 };
-const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+// مفتاح التوقيع: من المتغير أو من ملف دائم، كي لا تسقط جلسات الكيوسكات عند إعادة تشغيل الخادم.
+function loadSecret() {
+  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  const f = path.join(DATA_DIR, 'secret.key');
+  try { const v = fs.readFileSync(f, 'utf8').trim(); if (v.length >= 32) return v; } catch { /* يُنشأ أدناه */ }
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const v = crypto.randomBytes(32).toString('hex');
+  fs.writeFileSync(f, v, { mode: 0o600 });
+  return v;
+}
+const SECRET = loadSecret();
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 
 // ---------- تجهيز البيانات ----------
@@ -250,11 +260,59 @@ function eventAllowed(who) {
   return ++b.n <= 300;
 }
 
+// ---------- جلسات الكيوسكات (تفعيل كل جهاز بمعرف جلسة) ----------
+// pending = معرف جلسة أُنشئ من اللوحة وينتظر الإدخال في الكيوسك · active = كيوسك مفعّل · ended = جلسة منتهية
+const DEVICES = path.join(DATA_DIR, 'devices.json');
+const CODE_TTL_MS = 24 * 60 * 60 * 1000;
+let sessionDb = null;
+function sessions() {
+  if (!sessionDb) { try { sessionDb = readJson(DEVICES); } catch { sessionDb = { sessions: [] }; } if (!Array.isArray(sessionDb.sessions)) sessionDb.sessions = []; }
+  return sessionDb.sessions;
+}
+let sessionTimer = null;
+function saveSessionsSoon(now) {
+  if (now) { clearTimeout(sessionTimer); sessionTimer = null; try { writeJsonAtomic(DEVICES, sessionDb); } catch (e) { console.error(e.message); } return; }
+  if (sessionTimer) return;
+  sessionTimer = setTimeout(() => { sessionTimer = null; try { writeJsonAtomic(DEVICES, sessionDb); } catch (e) { console.error(e.message); } }, 5000);
+  sessionTimer.unref && sessionTimer.unref();
+}
+const cleanText = (v, n) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);
+function newCode() {
+  const used = new Set(sessions().filter((x) => x.status === 'pending').map((x) => x.code));
+  for (let i = 0; i < 20; i++) { const c = String(crypto.randomInt(0, 1e8)).padStart(8, '0'); if (!used.has(c)) return c; }
+  throw Object.assign(new Error('تعذّر توليد معرف'), { status: 500 });
+}
+function createSession(label) {
+  const now = Date.now();
+  const s = { id: 'ss_' + crypto.randomBytes(4).toString('hex'), code: newCode(), label: cleanText(label, 60), kioskName: '', status: 'pending',
+    createdAt: new Date(now).toISOString(), codeExpiresAt: new Date(now + CODE_TTL_MS).toISOString(), activatedAt: null, endedAt: null,
+    deviceId: '', lastSeen: '', version: '', started: 0, completed: 0 };
+  sessions().unshift(s); saveSessionsSoon(true); return s;
+}
+const deviceToken = (sid) => sign({ exp: 4102444800000, role: 'device', sid });
+/** يفحص رمز الكيوسك: null = بلا رمز · {ended:true} = رمز غير صالح/جلسة منتهية · {session} = فعّال */
+function deviceFromReq(req, tokenIn) {
+  const raw = tokenIn !== undefined ? tokenIn : req.headers['x-kiosk-token'];
+  if (!raw) return null;
+  const t = verifyToken(raw);
+  if (!t || t.role !== 'device' || !t.sid) return { ended: true };
+  const s = sessions().find((x) => x.id === t.sid);
+  return s && s.status === 'active' ? { session: s } : { ended: true };
+}
+function touchSession(s, version) {
+  s.lastSeen = new Date().toISOString();
+  if (version) s.version = String(version).slice(0, 16);
+  saveSessionsSoon();
+}
+const actFail = new Map(); // ip -> {n, until}
+function activationLimited(ip2) { const f = actFail.get(ip2); return f && f.n >= 10 && f.until > Date.now(); }
+function noteActFailure(ip2) { const f = actFail.get(ip2); if (!f || f.until < Date.now()) actFail.set(ip2, { n: 1, until: Date.now() + 60_000 }); else f.n++; }
+
 // ---------- المسارات ----------
 function auth(req) {
   const h = req.headers.authorization || '';
   const t = h.startsWith('Bearer ') && verifyToken(h.slice(7));
-  if (!t) return null;
+  if (!t || t.role === 'device') return null;   // رمز الكيوسك لا يمنح صلاحيات الإدارة
   return { role: ROLE_CAN[t.role] ? t.role : 'viewer', exp: t.exp };
 }
 const can = (who, perm) => !!who && ROLE_CAN[who.role].has(perm);
@@ -266,11 +324,36 @@ async function handle(req, res) {
   const p = url.pathname;
   const m = req.method;
 
-  if (m === 'OPTIONS') return send(res, 204, '', { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'If-None-Match, Content-Type, X-Kiosk-Device, X-Kiosk-Version' });
+  if (m === 'OPTIONS') return send(res, 204, '', { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'If-None-Match, Content-Type, X-Kiosk-Device, X-Kiosk-Version, X-Kiosk-Token' });
 
   // --- عام (يقرؤه التطبيق) ---
   if (p === '/api/health') return send(res, 200, { ok: true });
+  if (p === '/api/device/activate' && m === 'POST') {
+    const who2 = ip(req); const cors = { 'Access-Control-Allow-Origin': '*' };
+    if (activationLimited(who2)) return send(res, 429, { error: 'محاولات كثيرة، انتظر دقيقة', code: 'rate_limited' }, cors);
+    const body = await readJsonBody(req, 2048);
+    const code = String(body.code ?? '').replace(/\D/g, '');
+    const name = cleanText(body.name, 40);
+    if (code.length !== 8) return send(res, 400, { error: 'معرف الجلسة 8 أرقام', code: 'bad_code' }, cors);
+    if (!name) return send(res, 400, { error: 'اكتب اسم الكيوسك', code: 'bad_name' }, cors);
+    const s = sessions().find((x) => x.status === 'pending' && x.code === code);
+    if (!s) { noteActFailure(who2); return send(res, 404, { error: 'معرف الجلسة غير صحيح أو مستخدم', code: 'invalid_code' }, cors); }
+    if (Date.parse(s.codeExpiresAt) < Date.now()) { noteActFailure(who2); return send(res, 410, { error: 'انتهت صلاحية المعرف — أنشئ جلسة جديدة من اللوحة', code: 'expired' }, cors); }
+    s.status = 'active'; s.kioskName = name; s.activatedAt = new Date().toISOString(); s.deviceId = cleanText(body.deviceId, 24);
+    touchSession(s, body.appVersion); saveSessionsSoon(true);
+    audit({ role: 'device' }, 'device_activate', `تفعيل كيوسك «${name}»${s.label ? ' — ' + s.label : ''}`, { ip: who2 });
+    return send(res, 200, { sessionId: s.id, token: deviceToken(s.id), name, label: s.label }, cors);
+  }
+  if (p === '/api/device/deactivate' && m === 'POST') {
+    const cors = { 'Access-Control-Allow-Origin': '*' };
+    const d = deviceFromReq(req);
+    if (d && d.session) { d.session.status = 'ended'; d.session.endedAt = new Date().toISOString(); saveSessionsSoon(true); audit({ role: 'device' }, 'device_end', `إنهاء جلسة «${d.session.kioskName}» من الكيوسك نفسه`, { ip: ip(req) }); }
+    return send(res, 200, { ok: true }, cors);
+  }
   if (p === '/api/catalog' && (m === 'GET' || m === 'HEAD')) {
+    const dev = deviceFromReq(req);
+    if (dev && dev.ended) return send(res, 401, { error: 'انتهت جلسة هذا الكيوسك', code: 'session_ended' }, { 'Access-Control-Allow-Origin': '*' });
+    if (dev && dev.session) touchSession(dev.session, req.headers['x-kiosk-version']);
     if (req.headers['x-kiosk-device']) touchDevice(req.headers['x-kiosk-device'], req.headers['x-kiosk-version'], '');
     const body = fs.readFileSync(LIVE);
     const etag = '"' + crypto.createHash('sha1').update(body).digest('hex') + '"';
@@ -282,6 +365,14 @@ async function handle(req, res) {
   if (p === '/api/events' && m === 'POST') {
     if (!eventAllowed(ip(req))) return send(res, 429, { error: 'كثير' }, { 'Access-Control-Allow-Origin': '*' });
     const body = await readJsonBody(req, 2048);
+    const dev = deviceFromReq(req, body.token);
+    if (dev && dev.ended) return send(res, 401, { error: 'انتهت جلسة هذا الكيوسك', code: 'session_ended' }, { 'Access-Control-Allow-Origin': '*' });
+    if (dev && dev.session) {
+      touchSession(dev.session, body.appVersion);
+      if (body.type === 'session_start') dev.session.started++;
+      if (body.type === 'payment_completed') dev.session.completed++;
+      if (!body.deviceId) body.deviceId = dev.session.id;
+    }
     return send(res, recordEvent(body) ? 200 : 400, { ok: true }, { 'Access-Control-Allow-Origin': '*' });
   }
   if (p.startsWith('/uploads/')) {
@@ -380,6 +471,42 @@ async function handle(req, res) {
       if (used && used.size) return send(res, 409, { error: 'الصورة مستخدمة ولا يمكن حذفها', usedBy: [...used] });
       fs.unlinkSync(f); audit(who, 'media_delete', `حذف صورة ${name}`, { ip: ip(req) });
       return send(res, 200, { ok: true });
+    }
+    if (p === '/api/admin/sessions' && m === 'GET') {
+      if (!can(who, 'devices')) return forbid(res);
+      return send(res, 200, { sessions: sessions() });
+    }
+    if (p === '/api/admin/sessions' && m === 'POST') {
+      if (!can(who, 'devices')) return forbid(res);
+      const body = await readJsonBody(req, 2048);
+      const s = createSession(body.label);
+      audit(who, 'session_create', `فتح جلسة كيوسك جديدة${s.label ? ' — ' + s.label : ''}`, { ip: ip(req) });
+      return send(res, 200, { session: s });
+    }
+    const sm = /^\/api\/admin\/sessions\/(ss_[0-9a-f]{8})(?:\/(end|rename))?$/.exec(p);
+    if (sm) {
+      if (!can(who, 'devices')) return forbid(res);
+      const s = sessions().find((x) => x.id === sm[1]);
+      if (!s) return send(res, 404, { error: 'الجلسة غير موجودة' });
+      if (m === 'POST' && sm[2] === 'end') {
+        if (s.status === 'ended') return send(res, 200, { session: s });
+        s.status = 'ended'; s.endedAt = new Date().toISOString(); saveSessionsSoon(true);
+        audit(who, 'session_end', `إنهاء جلسة الكيوسك «${s.kioskName || s.label || s.id}»`, { ip: ip(req) });
+        return send(res, 200, { session: s });
+      }
+      if (m === 'POST' && sm[2] === 'rename') {
+        const body = await readJsonBody(req, 2048);
+        if (body.kioskName !== undefined) s.kioskName = cleanText(body.kioskName, 40);
+        if (body.label !== undefined) s.label = cleanText(body.label, 60);
+        saveSessionsSoon(true); audit(who, 'session_rename', `تعديل بيانات الكيوسك «${s.kioskName || s.id}»`, { ip: ip(req) });
+        return send(res, 200, { session: s });
+      }
+      if (m === 'DELETE' && !sm[2]) {
+        if (s.status === 'active') return send(res, 409, { error: 'أنهِ الجلسة أولاً قبل حذفها' });
+        sessionDb.sessions = sessions().filter((x) => x.id !== s.id); saveSessionsSoon(true);
+        audit(who, 'session_delete', `حذف سجل جلسة «${s.kioskName || s.label || s.id}»`, { ip: ip(req) });
+        return send(res, 200, { ok: true });
+      }
     }
     if (p === '/api/admin/audit' && m === 'GET') {
       if (!can(who, 'audit')) return forbid(res);

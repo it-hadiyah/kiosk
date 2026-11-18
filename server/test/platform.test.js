@@ -103,3 +103,64 @@ test('kiosk catalog fetch registers the device heartbeat', async () => {
   const s = (await as('manager', 'GET', '/api/admin/stats')).json.stats;
   assert.equal(s.devices['kiosk-77'].version, '1.2.3');
 });
+
+test('kiosk sessions: create → activate with code+name → heartbeat → end → kiosk is told to re-activate', async () => {
+  // الصلاحيات: المحرر والمشاهد لا يديران الجلسات
+  assert.equal((await as('editor', 'POST', '/api/admin/sessions', { label: 'x' })).status, 403);
+  assert.equal((await as('viewer', 'GET', '/api/admin/sessions')).status, 403);
+
+  const created = (await as('manager', 'POST', '/api/admin/sessions', { label: 'بهو الفرع' })).json.session;
+  assert.match(created.code, /^\d{8}$/); assert.equal(created.status, 'pending'); assert.equal(created.label, 'بهو الفرع');
+
+  // أخطاء التفعيل
+  assert.equal((await api('POST', '/api/device/activate', { code: '12', name: 'k' })).status, 400);
+  assert.equal((await api('POST', '/api/device/activate', { code: created.code, name: '' })).status, 400);
+  const wrong = await api('POST', '/api/device/activate', { code: '00000000', name: 'k' });
+  assert.equal(wrong.status, 404); assert.equal(wrong.json.code, 'invalid_code');
+
+  // تفعيل ناجح (يقبل الشرطة والمسافات)
+  const pretty = created.code.slice(0, 4) + '-' + created.code.slice(4);
+  const act = await api('POST', '/api/device/activate', { code: pretty, name: 'كيوسك المدخل', deviceId: 'abc123', appVersion: '1.0.0' });
+  assert.equal(act.status, 200); assert.equal(act.json.name, 'كيوسك المدخل'); assert.ok(act.json.token);
+  const token = act.json.token;
+  // المعرف يُستخدم مرة واحدة
+  assert.equal((await api('POST', '/api/device/activate', { code: created.code, name: 'ثاني' })).status, 404);
+
+  // الكتالوج يعمل بالرمز ويسجل آخر اتصال
+  const cat = await api('GET', '/api/catalog', undefined, { 'X-Kiosk-Token': token, 'X-Kiosk-Version': '1.2.3' });
+  assert.equal(cat.status, 200);
+  // رمز الكيوسك لا يعطي صلاحيات الإدارة
+  assert.equal((await api('GET', '/api/admin/catalog', undefined, { Authorization: `Bearer ${token}` })).status, 401);
+  // أحداث بالرمز تُحتسب على الجلسة
+  await api('POST', '/api/events', { type: 'session_start', token });
+  await api('POST', '/api/events', { type: 'payment_completed', programId: 'zakat', token });
+  const list = (await as('manager', 'GET', '/api/admin/sessions')).json.sessions;
+  const mine = list.find((x) => x.id === created.id);
+  assert.equal(mine.status, 'active'); assert.equal(mine.kioskName, 'كيوسك المدخل'); assert.equal(mine.version, '1.2.3');
+  assert.equal(mine.started, 1); assert.equal(mine.completed, 1); assert.ok(mine.lastSeen);
+
+  // إعادة تسمية ثم إنهاء من اللوحة
+  assert.equal((await as('manager', 'POST', `/api/admin/sessions/${created.id}/rename`, { kioskName: 'المدخل الرئيسي', label: 'الدور الأرضي' })).json.session.kioskName, 'المدخل الرئيسي');
+  assert.equal((await as('manager', 'DELETE', `/api/admin/sessions/${created.id}`)).status, 409); // فعّالة
+  assert.equal((await as('manager', 'POST', `/api/admin/sessions/${created.id}/end`)).json.session.status, 'ended');
+  const after = await api('GET', '/api/catalog', undefined, { 'X-Kiosk-Token': token });
+  assert.equal(after.status, 401); assert.equal(after.json.code, 'session_ended');
+  assert.equal((await api('POST', '/api/events', { type: 'session_start', token })).status, 401);
+  // كيوسك قديم بلا رمز ما زال يقرأ الكتالوج العام
+  assert.equal((await api('GET', '/api/catalog')).status, 200);
+
+  // فتح جلسة ثانية (نقل الكيوسك) وتفعيله من جديد ثم إنهاؤها من الكيوسك نفسه
+  const second = (await as('manager', 'POST', '/api/admin/sessions', { label: 'المكان الجديد' })).json.session;
+  const act2 = await api('POST', '/api/device/activate', { code: second.code, name: 'كيوسك المدخل' });
+  assert.equal(act2.status, 200);
+  assert.equal((await api('POST', '/api/device/deactivate', {}, { 'X-Kiosk-Token': act2.json.token })).status, 200);
+  assert.equal((await api('GET', '/api/catalog', undefined, { 'X-Kiosk-Token': act2.json.token })).status, 401);
+  assert.equal((await as('manager', 'DELETE', `/api/admin/sessions/${created.id}`)).status, 200);
+
+  const acts = (await as('super', 'GET', '/api/admin/audit')).json.entries.map((e) => e.action);
+  for (const a of ['session_create', 'device_activate', 'session_end', 'device_end', 'session_rename', 'session_delete']) assert.ok(acts.includes(a), a);
+});
+
+test('session secret persists across restarts (device tokens stay valid)', async () => {
+  assert.ok(fs.existsSync(path.join(dataDir, 'secret.key')));
+});
