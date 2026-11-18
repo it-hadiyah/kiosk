@@ -66,6 +66,7 @@ function normalize(input) {
   if (RADII.includes(th.radius)) settings.theme.radius = th.radius;
   if (contrast(settings.theme.primary, '#FFFFFF') < 3) errors.push(`الهوية البصرية: اللون الأساسي فاتح جداً — النص الأبيض فوق الأزرار لن يُقرأ (التباين ${contrast(settings.theme.primary, '#FFFFFF').toFixed(1)}، المطلوب 3 على الأقل)`);
   if (contrast(settings.theme.ink, '#F4F6F6') < 4.5) errors.push(`الهوية البصرية: لون النصوص باهت — لن تُقرأ العناوين (التباين ${contrast(settings.theme.ink, '#F4F6F6').toFixed(1)}، المطلوب 4.5 على الأقل)`);
+  if (settings.warnSeconds > settings.idleSeconds) errors.push(`الإعدادات: مهلة التنبيه (${settings.warnSeconds} ث) يجب ألا تتجاوز مهلة الخمول (${settings.idleSeconds} ث)`);
   const qa = Array.isArray(st.quickAmounts) ? st.quickAmounts : [];
   settings.quickAmounts = [...new Set(qa.map((n) => int(n, 1, settings.maxAmount, 0)).filter((n) => n > 0))].slice(0, 8);
   if (!settings.quickAmounts.length) {
@@ -88,6 +89,7 @@ function normalize(input) {
     const prog = {
       id,
       active: p.active !== false,
+      archived: p.archived === true,
       title,
       image: image(p.image),
       imageAlign: ALIGNS.includes(p.imageAlign) ? p.imageAlign : 'center',
@@ -133,7 +135,7 @@ function normalize(input) {
     const active = c.active !== false;
     if (active && !items.length) warnings.push(`الكتالوج ${title.ar || id}: فارغ`);
     catalogs.push({
-      id, active, title, subtitle: loc(c.subtitle), image: image(c.image),
+      id, active, archived: c.archived === true, title, subtitle: loc(c.subtitle), image: image(c.image),
       imageAlign: ALIGNS.includes(c.imageAlign) ? c.imageAlign : 'center', items, kiosks: kioskIds(c.kiosks),
     });
   }

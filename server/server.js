@@ -76,7 +76,7 @@ function writeJsonAtomic(f, obj) {
   fs.renameSync(tmp, f);
 }
 const sameContent = (a, b) => {
-  const strip = (o) => JSON.stringify({ ...o, updatedAt: 0 });
+  const strip = (o) => JSON.stringify({ ...o, updatedAt: 0, release: 0 });
   return strip(a) === strip(b);
 };
 
@@ -224,11 +224,42 @@ function mediaUsage() {
   }
   return use;
 }
+/** أبعاد الصورة من ترويستها (jpg/png/webp) دون مكتبات. */
+function imageSize(buf) {
+  try {
+    if (buf[0] === 0x89 && buf[1] === 0x50) return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+    if (buf[0] === 0xff && buf[1] === 0xd8) {
+      let i = 2;
+      while (i < buf.length - 9) {
+        if (buf[i] !== 0xff) { i++; continue; }
+        const mk = buf[i + 1];
+        if (mk >= 0xc0 && mk <= 0xcf && mk !== 0xc4 && mk !== 0xc8 && mk !== 0xcc) return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+        i += 2 + buf.readUInt16BE(i + 2);
+      }
+    }
+    if (buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP') {
+      const k = buf.subarray(12, 16).toString();
+      if (k === 'VP8 ') return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff };
+      if (k === 'VP8L') { const b = buf.readUInt32LE(21); return { width: (b & 0x3fff) + 1, height: ((b >> 14) & 0x3fff) + 1 }; }
+      if (k === 'VP8X') return { width: 1 + buf.readUIntLE(24, 3), height: 1 + buf.readUIntLE(27, 3) };
+    }
+  } catch { /* ملف تالف */ }
+  return null;
+}
+const dimCache = new Map();
+function dimsOf(file, st) {
+  const key = file + ':' + st.mtimeMs;
+  if (dimCache.has(key)) return dimCache.get(key);
+  let d = null;
+  try { const fd = fs.openSync(file, 'r'); const b = Buffer.alloc(262144); const n = fs.readSync(fd, b, 0, b.length, 0); fs.closeSync(fd); d = imageSize(b.subarray(0, n)); } catch { /* */ }
+  dimCache.set(key, d); return d;
+}
 function listMedia() {
   const use = mediaUsage();
   return fs.readdirSync(UPLOADS_DIR).filter((f) => /\.(jpe?g|png|webp)$/i.test(f)).map((f) => {
     const st = fs.statSync(path.join(UPLOADS_DIR, f));
-    return { name: f, url: `/uploads/${f}`, size: st.size, at: st.mtime.toISOString(), usedBy: [...(use.get(`/uploads/${f}`) || [])] };
+    const dm = dimsOf(path.join(UPLOADS_DIR, f), st) || {};
+    return { name: f, url: `/uploads/${f}`, size: st.size, at: st.mtime.toISOString(), type: path.extname(f).slice(1).toLowerCase().replace('jpeg', 'jpg'), width: dm.width || 0, height: dm.height || 0, usedBy: [...(use.get(`/uploads/${f}`) || [])] };
   }).sort((x, y) => y.at.localeCompare(x.at));
 }
 
@@ -251,7 +282,7 @@ const EVENT_TYPES = new Set(['session_start', 'catalog_opened', 'program_selecte
 const TZ_HOURS = Number(process.env.TZ_OFFSET_HOURS ?? 3);
 const dayKey = (t = Date.now()) => new Date(t + TZ_HOURS * 3_600_000).toISOString().slice(0, 10);
 const cleanId = (v, n = 40) => (typeof v === 'string' ? v.replace(/[^\w-]/g, '').slice(0, n) : '');
-const newScope = () => ({ sessions: 0, completed: 0, abandoned: 0, amount: 0, durationSum: 0, programs: {}, catalogs: {} });
+const newScope = () => ({ sessions: 0, completed: 0, abandoned: 0, amount: 0, durationSum: 0, selected: 0, amountChosen: 0, started: 0, programs: {}, catalogs: {} });
 /** يطبّق حدثاً على نطاق (يوم كامل أو جهاز داخل يوم). المبالغ تجريبية. */
 function applyEvent(sc, type, pid, cid, amount, durationMs) {
   const prog = () => pid && (sc.programs[pid] || (Object.keys(sc.programs).length < 200 ? (sc.programs[pid] = { selected: 0, completed: 0, amount: 0 }) : null));
@@ -259,7 +290,9 @@ function applyEvent(sc, type, pid, cid, amount, durationMs) {
   if (type === 'session_start') sc.sessions++;
   else if (type === 'session_abandoned') sc.abandoned++;
   else if (type === 'catalog_opened') { const c = cat(); if (c) c.visits++; }
-  else if (type === 'program_selected') { const q = prog(); if (q) q.selected++; }
+  else if (type === 'program_selected') { sc.selected++; const q = prog(); if (q) q.selected++; }
+  else if (type === 'amount_chosen') sc.amountChosen++;
+  else if (type === 'payment_started') sc.started++;
   else if (type === 'payment_completed') {
     sc.completed++; sc.amount += amount;
     if (durationMs > 0 && durationMs < 3_600_000) sc.durationSum += durationMs;
@@ -269,6 +302,7 @@ function applyEvent(sc, type, pid, cid, amount, durationMs) {
 }
 function recordEvent(e) {
   if (!e || !EVENT_TYPES.has(e.type)) return false;
+  if (e.mode === 'production') return false; // لا مسار إنتاج فعلي بعد: لا تُخلط الأحداث
   const S = loadStats(); const day = dayKey();
   const D = S.daily[day] || (S.daily[day] = { sessions: 0, completed: 0 });
   const pid = cleanId(e.programId), cid = cleanId(e.catalogId), did = cleanId(e.deviceId, 24);
@@ -286,7 +320,7 @@ function recordEvent(e) {
     default: break;
   }
   // تفصيل يومي: الإجمالي + لكل جهاز (للوحة المؤشرات)
-  if (e.type !== 'heartbeat' && e.type !== 'amount_chosen' && e.type !== 'payment_started') {
+  if (e.type !== 'heartbeat') {
     S.byDay = S.byDay || {};
     const B = S.byDay[day] || (S.byDay[day] = { ...newScope(), devices: {} });
     applyEvent(B, e.type, pid, cid, amount, dur);
@@ -299,25 +333,28 @@ function recordEvent(e) {
   return true;
 }
 /** يجمع أيام النطاق إلى نطاق واحد: عام + لكل جهاز، مع السلسلة اليومية. */
-function buildDashboard(range) {
+function buildDashboard(range, mode = 'simulation') {
+  if (mode === 'production') return { mode: 'production', demo: false, available: false, reason: 'لا يوجد نظام دفع فعلي مربوط بعد، فلا توجد تبرعات حقيقية لعرضها. ستظهر هنا بعد ربط بوابة دفع واعتمادها.' };
   const S = loadStats(); const byDay = S.byDay || {};
   const today = dayKey();
   const n = range === 'today' ? 1 : range === '7' ? 7 : range === '30' ? 30 : 0;
-  const cutoff = n ? dayKey(Date.now() - (n - 1) * 86_400_000) : '';
-  const days = Object.keys(byDay).filter((d) => d >= cutoff && d <= today).sort();
+  const dayAt = (offset) => dayKey(Date.now() - offset * 86_400_000);
+  const inRange = (from, to) => Object.keys(byDay).filter((d) => d >= from && d <= to).sort();
+  const days = n ? inRange(dayAt(n - 1), today) : inRange('', today);
   const total = () => ({ ...newScope(), byDay: [] });
+  const SUM = ['sessions', 'completed', 'abandoned', 'amount', 'durationSum', 'selected', 'amountChosen', 'started'];
   const add = (into, sc) => {
-    for (const k of ['sessions', 'completed', 'abandoned', 'amount', 'durationSum']) into[k] += sc[k] || 0;
+    for (const k of SUM) into[k] += sc[k] || 0;
     for (const [id, v] of Object.entries(sc.programs || {})) { const t = into.programs[id] || (into.programs[id] = { selected: 0, completed: 0, amount: 0 }); t.selected += v.selected; t.completed += v.completed; t.amount += v.amount; }
     for (const [id, v] of Object.entries(sc.catalogs || {})) { const t = into.catalogs[id] || (into.catalogs[id] = { visits: 0, completed: 0, amount: 0 }); t.visits += v.visits; t.completed += v.completed; t.amount += v.amount; }
   };
-  const all = total(); const devs = {};
-  // السلسلة اليومية: نملأ الأيام الفارغة داخل نطاق قصير كي يظهر الرسم متصلاً
-  const series = n ? Array.from({ length: n }, (_, i) => dayKey(Date.now() - (n - 1 - i) * 86_400_000)) : days;
-  for (const d of days) {
-    const B = byDay[d]; add(all, B);
-    for (const [did, sc] of Object.entries(B.devices || {})) add(devs[did] || (devs[did] = total()), sc);
-  }
+  const collect = (list) => { const all = total(); const devs = {}; for (const d of list) { const B = byDay[d]; add(all, B); for (const [did, sc] of Object.entries(B.devices || {})) add(devs[did] || (devs[did] = total()), sc); } return { all, devs }; };
+  const cur = collect(days);
+  const { all, devs } = cur;
+  // الفترة السابقة المماثلة للمقارنة (غير متاحة لـ «الكل»)
+  let prev = null; let prevDevs = {};
+  if (n) { const pd = inRange(dayAt(2 * n - 1), dayAt(n)); const pc = collect(pd); prev = { sessions: pc.all.sessions, completed: pc.all.completed, abandoned: pc.all.abandoned, amount: pc.all.amount, hasData: pd.length > 0 }; prevDevs = pc.devs; }
+  const series = n ? Array.from({ length: n }, (_, i) => dayAt(n - 1 - i)) : days;
   for (const d of series) {
     const B = byDay[d];
     all.byDay.push({ date: d, sessions: B ? B.sessions : 0, completed: B ? B.completed : 0, amount: B ? B.amount : 0 });
@@ -325,13 +362,12 @@ function buildDashboard(range) {
   }
   const sortProg = (o) => Object.entries(o.programs).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.completed - a.completed || b.selected - a.selected);
   const sortCat = (o) => Object.entries(o.catalogs).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.completed - a.completed || b.visits - a.visits);
-  const fin = (o) => ({ sessions: o.sessions, completed: o.completed, abandoned: o.abandoned, amount: o.amount, avgDurationSec: o.completed ? Math.round(o.durationSum / o.completed / 1000) : 0, programs: sortProg(o), catalogs: sortCat(o), byDay: o.byDay });
+  const fin = (o) => ({ sessions: o.sessions, completed: o.completed, abandoned: o.abandoned, amount: o.amount, selected: o.selected, amountChosen: o.amountChosen, started: o.started, avgDurationSec: o.completed ? Math.round(o.durationSum / o.completed / 1000) : 0, programs: sortProg(o), catalogs: sortCat(o), byDay: o.byDay });
   const meta = new Map(knownDevices().map((d) => [d.deviceId, d]));
-  const devices = Object.entries(devs).map(([deviceId, t]) => ({ deviceId, name: (meta.get(deviceId) || {}).name || deviceId, label: (meta.get(deviceId) || {}).label || '', status: (meta.get(deviceId) || {}).status || 'unknown', lastSeen: (meta.get(deviceId) || {}).lastSeen || '', ...fin(t) }));
-  // أجهزة مفعّلة لم تُسجَّل لها أحداث في النطاق: تظهر بأصفار
-  for (const [deviceId, d] of meta) if (!devs[deviceId]) devices.push({ deviceId, name: d.name || deviceId, label: d.label || '', status: d.status, lastSeen: d.lastSeen, ...fin(total()) });
+  const devices = Object.entries(devs).map(([deviceId, t]) => { const pv = prevDevs[deviceId]; return { deviceId, name: (meta.get(deviceId) || {}).name || deviceId, label: (meta.get(deviceId) || {}).label || '', status: (meta.get(deviceId) || {}).status || 'unknown', lastSeen: (meta.get(deviceId) || {}).lastSeen || '', ...fin(t), prev: n && pv ? { sessions: pv.sessions, completed: pv.completed, amount: pv.amount } : (n ? { sessions: 0, completed: 0, amount: 0 } : null) }; });
+  for (const [deviceId, d] of meta) if (!devs[deviceId]) devices.push({ deviceId, name: d.name || deviceId, label: d.label || '', status: d.status, lastSeen: d.lastSeen, ...fin(total()), prev: null });
   devices.sort((a, b) => b.completed - a.completed || String(a.name).localeCompare(String(b.name), 'ar'));
-  return { demo: true, range: n ? range : 'all', since: S.since, days: days.length, ...fin(all), devices };
+  return { mode: 'simulation', demo: true, available: true, range: n ? range : 'all', since: S.since, days: days.length, prev, ...fin(all), devices };
 }
 const evBucket = new Map(); // ip -> {n, reset}
 function eventAllowed(who) {
@@ -366,8 +402,14 @@ function createSession(label) {
   const now = Date.now();
   const s = { id: 'ss_' + crypto.randomBytes(4).toString('hex'), code: newCode(), label: cleanText(label, 60), kioskName: '', status: 'pending',
     createdAt: new Date(now).toISOString(), codeExpiresAt: new Date(now + CODE_TTL_MS).toISOString(), activatedAt: null, endedAt: null,
-    deviceId: '', lastSeen: '', version: '', started: 0, completed: 0 };
+    deviceId: '', lastSeen: '', version: '', started: 0, completed: 0, contentRelease: 0, contentSyncedAt: '', log: [] };
+  sessionLog(s, 'created', label ? 'المكان: ' + s.label : '');
   sessions().unshift(s); saveSessionsSoon(true); return s;
+}
+const OFFLINE_MS = Number(process.env.OFFLINE_MINUTES || 5) * 60_000;
+function sessionLog(s, type, detail = '') {
+  (s.log || (s.log = [])).unshift({ at: new Date().toISOString(), type, detail: String(detail).slice(0, 120) });
+  if (s.log.length > 40) s.log.length = 40;
 }
 const deviceToken = (sid) => sign({ exp: 4102444800000, role: 'device', sid });
 /** يفحص رمز الكيوسك: null = بلا رمز · {ended:true} = رمز غير صالح/جلسة منتهية · {session} = فعّال */
@@ -381,8 +423,13 @@ function deviceFromReq(req, tokenIn) {
 }
 function touchSession(s, version) {
   s.lastSeen = new Date().toISOString();
-  if (version) s.version = String(version).slice(0, 16);
+  if (version && String(version).slice(0, 16) !== s.version) { if (s.version) sessionLog(s, 'version', `إصدار التطبيق ${s.version} ← ${String(version).slice(0, 16)}`); s.version = String(version).slice(0, 16); }
   saveSessionsSoon();
+}
+/** يسجّل أن الجهاز جلب الإصدار المنشور (أي «استلمه»). */
+function noteSync(s, release) {
+  s.contentCheckedAt = new Date().toISOString();
+  if (s.contentRelease !== release) { sessionLog(s, 'sync', release ? `استلم المحتوى — الإصدار ${release}` : 'استلم المحتوى (قبل ترقيم الإصدارات)'); s.contentRelease = release; s.contentSyncedAt = s.contentCheckedAt; }
 }
 const actFail = new Map(); // ip -> {n, until}
 function activationLimited(ip2) { const f = actFail.get(ip2); return f && f.n >= 10 && f.until > Date.now(); }
@@ -392,7 +439,7 @@ function noteActFailure(ip2) { const f = actFail.get(ip2); if (!f || f.until < D
 /** نسخة من الكتالوج مناسبة لجهاز معيّن: العناصر المحدّدة لأجهزة أخرى تُحذف مع كل مراجعها.
  *  بلا جهاز معروف (deviceId فارغ) يرى العناصر المفتوحة للكل فقط. */
 function filterForDevice(cat, deviceId) {
-  const ok = (o) => !o.kiosks || !o.kiosks.length || (deviceId && o.kiosks.includes(deviceId));
+  const ok = (o) => !o.archived && (!o.kiosks || !o.kiosks.length || (deviceId && o.kiosks.includes(deviceId)));
   const strip = (o) => { const rest = { ...o }; delete rest.kiosks; return rest; };
   const programs = (cat.programs || []).filter(ok);
   const progIds = new Set(programs.map((p) => p.id));
@@ -408,7 +455,7 @@ function filterForDevice(cat, deviceId) {
   const featured = cat.featured ? { ...cat.featured, items: (cat.featured.items || []).filter((x) => has(x.type, x.id)) } : cat.featured;
   return { ...cat, programs: programs.map(strip), catalogs, home, featured };
 }
-const anyRestricted = (cat) => [...(cat.programs || []), ...(cat.catalogs || [])].some((o) => o.kiosks && o.kiosks.length);
+const anyRestricted = (cat) => [...(cat.programs || []), ...(cat.catalogs || [])].some((o) => o.archived || (o.kiosks && o.kiosks.length));
 /** الأجهزة المعروفة (آخر جلسة لكل deviceId) لاختيارها عند تحديد ظهور برنامج. */
 function knownDevices() {
   const by = new Map();
@@ -416,10 +463,87 @@ function knownDevices() {
     if (!s.deviceId) continue;
     const prev = by.get(s.deviceId);
     const stamp = s.activatedAt || s.createdAt;
-    if (!prev || stamp > prev.stamp) by.set(s.deviceId, { deviceId: s.deviceId, name: s.kioskName, label: s.label, status: s.status, lastSeen: s.lastSeen, stamp });
+    if (!prev || stamp > prev.stamp) by.set(s.deviceId, { deviceId: s.deviceId, name: s.kioskName, label: s.label, status: s.status, sessionId: s.id, lastSeen: s.lastSeen, version: s.version, contentRelease: s.contentRelease || 0, contentSyncedAt: s.contentSyncedAt || '', activatedAt: s.activatedAt, stamp });
     else if (s.status === 'active' && prev.status !== 'active') prev.status = 'active';
   }
-  return [...by.values()].map((d) => { const o = { ...d }; delete o.stamp; return o; }).sort((a, b) => String(a.name).localeCompare(String(b.name), 'ar'));
+  const list = [...by.values()].map((d) => { const o = { ...d }; delete o.stamp; return o; });
+  const now = Date.now(); const rel = liveRelease();
+  const relAt = (readReleases()[0] || {}).at;
+  const versions = list.filter((d) => d.status === 'active' && d.version).map((d) => d.version);
+  const newest = versions.sort((a, b2) => a.localeCompare(b2, undefined, { numeric: true })).pop() || '';
+  for (const d of list) {
+    d.online = d.status === 'active' && !!d.lastSeen && now - Date.parse(d.lastSeen) < OFFLINE_MS;
+    d.behind = d.status === 'active' && d.online && rel > 0 && d.contentRelease !== rel && relAt && now - Date.parse(relAt) > 3 * 60_000;
+    d.alerts = [];
+    if (d.status === 'active' && !d.online) d.alerts.push({ id: `offline:${d.deviceId}`, severity: 'error', kind: 'offline', title: `الجهاز «${d.name}» غير متصل`, detail: d.lastSeen ? `آخر اتصال ${d.lastSeen}` : 'لم يتصل بعد التفعيل', target: { type: 'device', id: d.deviceId } });
+    if (d.behind) d.alerts.push({ id: `behind:${d.deviceId}`, severity: 'warn', kind: 'behind', title: `الجهاز «${d.name}» لم يستلم آخر إصدار`, detail: `لديه الإصدار ${d.contentRelease || 'القديم'} والمنشور ${rel}`, target: { type: 'device', id: d.deviceId } });
+    if (d.status === 'active' && newest && d.version && d.version !== newest) d.alerts.push({ id: `appver:${d.deviceId}`, severity: 'info', kind: 'old_app', title: `الجهاز «${d.name}» بإصدار تطبيق أقدم (${d.version})`, detail: `الأحدث على الأجهزة ${newest}`, target: { type: 'device', id: d.deviceId } });
+  }
+  return list.sort((a, b2) => String(a.name).localeCompare(String(b2.name), 'ar'));
+}
+
+// ---------- الإصدارات (Releases) ----------
+const RELEASES = path.join(DATA_DIR, 'releases.json');
+const readReleases = () => { try { const a = readJson(RELEASES); return Array.isArray(a) ? a : []; } catch { return []; } };
+const liveRelease = () => { try { return Number(readJson(LIVE).release) || 0; } catch { return 0; } };
+const uploadExists = (url) => { const m = /^\/uploads\/([\w.\-]+)$/.exec(url || ''); return !!m && fs.existsSync(path.join(UPLOADS_DIR, m[1])); };
+
+/** فحص ما قبل النشر على المسودة الحالية: أخطاء مانعة + تنبيهات + ملخص التغييرات. */
+function preflight() {
+  const draft = readJson(DRAFT); const live = readJson(LIVE);
+  const { catalog, errors, warnings } = normalize(draft);
+  const checks = []; const add = (id, status, title, items = [], detail = '') => checks.push({ id, status, title, detail, items });
+  const act = (list) => list.filter((o) => o.active && !o.archived);
+  const lab = (kind, o) => ({ type: kind, id: o.id, label: nameOf(o) });
+  const progs = act(catalog.programs), cats = act(catalog.catalogs);
+  add('structure', errors.length ? 'error' : 'ok', 'سلامة البيانات', errors.map((e) => ({ label: e })));
+  const missingImg = [...progs.map((o) => ['program', o]), ...cats.map((o) => ['catalog', o])].filter(([, o]) => o.image && o.image.startsWith('/uploads/') && !uploadExists(o.image)).map(([k, o]) => lab(k, o));
+  add('images_missing', missingImg.length ? 'error' : 'ok', 'ملفات الصور موجودة', missingImg, 'صور مرتبطة بملفات غير موجودة على الخادم.');
+  const noImg = [...progs.map((o) => ['program', o]), ...cats.map((o) => ['catalog', o])].filter(([, o]) => !o.image).map(([k, o]) => lab(k, o));
+  add('images_none', noImg.length ? 'warn' : 'ok', 'كل عنصر نشط له صورة', noImg);
+  const needTr = [...progs.map((o) => ['program', o]), ...cats.map((o) => ['catalog', o])].filter(([, o]) => ['fr', 'en', 'ur'].some((l) => !(o.title[l] || '').trim())).map(([k, o]) => ({ ...lab(k, o), label: `${nameOf(o)} — ينقص: ${['fr', 'en', 'ur'].filter((l) => !(o.title[l] || '').trim()).map((l) => ({ fr: 'Français', en: 'English', ur: 'اردو' }[l])).join('، ')}` }));
+  add('translations', needTr.length ? 'warn' : 'ok', 'الترجمات مكتملة', needTr, 'العنصر الناقص ترجمته يظهر بالعربية في اللغات الأخرى.');
+  const placed = (kind, id) => (catalog.home || []).some((h) => h.type === kind && h.id === id) || (kind === 'program' ? catalog.catalogs.some((c) => c.active && !c.archived && c.items.some((i) => i.programId === id)) : false) || (catalog.featured.items || []).some((x) => x.type === kind && x.id === id);
+  const orphans = [...progs.map((o) => ['program', o]), ...cats.map((o) => ['catalog', o])].filter(([k, o]) => !placed(k, o.id)).map(([k, o]) => lab(k, o));
+  add('placement', orphans.length ? 'warn' : 'ok', 'كل عنصر نشط موضوع في مكان ظاهر', orphans, 'عنصر مفعّل لكنه غير موضوع في الرئيسية أو كتالوج.');
+  const emptyCats = cats.filter((c) => !c.items.some((i) => progs.some((p) => p.id === i.programId))).map((o) => lab('catalog', o));
+  add('empty_catalogs', emptyCats.length ? 'warn' : 'ok', 'لا كتالوج فارغ', emptyCats);
+  const archivedUsed = [...catalog.programs.filter((p) => p.archived).filter((p) => (catalog.home || []).some((h) => h.type === 'program' && h.id === p.id)).map((p) => lab('program', p))];
+  add('archived_refs', archivedUsed.length ? 'warn' : 'ok', 'لا عناصر مؤرشفة في الصفحة الرئيسية', archivedUsed, 'العنصر المؤرشف لا يظهر للمتبرعين رغم وجوده في الرئيسية.');
+  const known = new Set(knownDevices().map((d) => d.deviceId));
+  const unknownDev = [...catalog.programs.map((o) => ['program', o]), ...catalog.catalogs.map((o) => ['catalog', o])].filter(([, o]) => (o.kiosks || []).some((id) => !known.has(id))).map(([k, o]) => lab(k, o));
+  add('devices_unknown', unknownDev.length ? 'warn' : 'ok', 'التقييد بالأجهزة يشير لأجهزة معروفة', unknownDev);
+  if (catalog.featured && catalog.featured.enabled && !(catalog.featured.items || []).length) add('featured_empty', 'warn', 'شريط «الأكثر رواجاً» المفعّل له عناصر', []);
+  const changes = diffSummary(live, catalog);
+  const online = knownDevices().filter((d) => d.online).length;
+  const blocking = errors.length > 0 || checks.some((c) => c.status === 'error');
+  return { ok: !blocking, errors, warnings, checks, changes, hasChanges: !sameContent(catalog, live), nextRelease: (Number(live.release) || 0) + 1, currentRelease: Number(live.release) || 0, devicesOnline: online, devicesTotal: knownDevices().length };
+}
+
+/** مركز التشغيل: الأجهزة + حالة المزامنة + التنبيهات (حقيقية فقط، من بيانات الخادم). */
+function buildOps() {
+  const devices = knownDevices(); const active = devices.filter((d) => d.status === 'active');
+  const rel = liveRelease(); const releases = readReleases();
+  const alerts = devices.flatMap((d) => d.alerts);
+  // صور مفقودة (مرتبطة بملف غير موجود)
+  const refs = new Map();
+  for (const [file, tag] of [[DRAFT, 'المسودة'], [LIVE, 'المنشور']]) {
+    let c; try { c = readJson(file); } catch { continue; }
+    const add = (u, d) => { if (u && u.startsWith('/uploads/')) { (refs.get(u) || refs.set(u, new Set()).get(u)).add(`${tag}: ${d}`); } };
+    for (const p of c.programs || []) { add(p.image, `برنامج «${nameOf(p)}»`); add(p.popupImage, `نافذة «${nameOf(p)}»`); }
+    for (const k of c.catalogs || []) add(k.image, `كتالوج «${nameOf(k)}»`);
+    if (c.settings) add(c.settings.welcomeBackground, 'خلفية الترحيب');
+  }
+  const missing = [...refs].filter(([u]) => !uploadExists(u)).map(([u, set]) => ({ url: u, usedBy: [...set] }));
+  for (const mm of missing) alerts.push({ id: `media:${mm.url}`, severity: 'error', kind: 'media_missing', title: `ملف صورة مفقود: ${path.basename(mm.url)}`, detail: mm.usedBy.slice(0, 2).join(' · '), target: { type: 'media', id: mm.url } });
+  // فشل نشر بعد آخر نشر ناجح
+  const lastOk = (releases[0] || {}).at || '';
+  const failedPub = readAudit(100).find((e) => e.action === 'publish_failed' && e.at > lastOk && Date.now() - Date.parse(e.at) < 24 * 3_600_000);
+  if (failedPub) alerts.push({ id: 'publish_failed', severity: 'error', kind: 'publish_failed', title: 'فشلت آخر محاولة نشر', detail: failedPub.summary, target: { type: 'publish', id: '' } });
+  const order = { error: 0, warn: 1, info: 2 };
+  alerts.sort((a, b) => order[a.severity] - order[b.severity]);
+  const summary = { total: active.length, online: active.filter((d) => d.online).length, offline: active.filter((d) => !d.online).length, behind: active.filter((d) => d.behind).length, attention: active.filter((d) => d.alerts.length).length, upToDate: active.filter((d) => rel > 0 && d.contentRelease === rel).length };
+  return { now: new Date().toISOString(), liveRelease: rel, livePublishedAt: (releases[0] || {}).at || '', lastPublish: releases[0] || null, devices, summary, alerts, missingMedia: missing, offlineMinutes: OFFLINE_MS / 60000 };
 }
 
 // ---------- المسارات ----------
@@ -454,20 +578,20 @@ async function handle(req, res) {
     if (!s) { noteActFailure(who2); return send(res, 404, { error: 'معرف الجلسة غير صحيح أو مستخدم', code: 'invalid_code' }, cors); }
     if (Date.parse(s.codeExpiresAt) < Date.now()) { noteActFailure(who2); return send(res, 410, { error: 'انتهت صلاحية المعرف — أنشئ جلسة جديدة من اللوحة', code: 'expired' }, cors); }
     s.status = 'active'; s.kioskName = name; s.activatedAt = new Date().toISOString(); s.deviceId = cleanText(body.deviceId, 24);
-    touchSession(s, body.appVersion); saveSessionsSoon(true);
+    sessionLog(s, 'activated', `سُمّي «${name}»`); touchSession(s, body.appVersion); saveSessionsSoon(true);
     audit({ role: 'device' }, 'device_activate', `تفعيل كيوسك «${name}»${s.label ? ' — ' + s.label : ''}`, { ip: who2 });
     return send(res, 200, { sessionId: s.id, token: deviceToken(s.id), name, label: s.label }, cors);
   }
   if (p === '/api/device/deactivate' && m === 'POST') {
     const cors = { 'Access-Control-Allow-Origin': '*' };
     const d = deviceFromReq(req);
-    if (d && d.session) { d.session.status = 'ended'; d.session.endedAt = new Date().toISOString(); saveSessionsSoon(true); audit({ role: 'device' }, 'device_end', `إنهاء جلسة «${d.session.kioskName}» من الكيوسك نفسه`, { ip: ip(req) }); }
+    if (d && d.session) { d.session.status = 'ended'; d.session.endedAt = new Date().toISOString(); sessionLog(d.session, 'ended', 'أنهيت من الكيوسك نفسه'); saveSessionsSoon(true); audit({ role: 'device' }, 'device_end', `إنهاء جلسة «${d.session.kioskName}» من الكيوسك نفسه`, { ip: ip(req) }); }
     return send(res, 200, { ok: true }, cors);
   }
   if (p === '/api/catalog' && (m === 'GET' || m === 'HEAD')) {
     const dev = deviceFromReq(req);
     if (dev && dev.ended) return send(res, 401, { error: 'انتهت جلسة هذا الكيوسك', code: 'session_ended' }, { 'Access-Control-Allow-Origin': '*' });
-    if (dev && dev.session) touchSession(dev.session, req.headers['x-kiosk-version']);
+    if (dev && dev.session) { touchSession(dev.session, req.headers['x-kiosk-version']); noteSync(dev.session, liveRelease()); }
     if (req.headers['x-kiosk-device']) touchDevice(req.headers['x-kiosk-device'], req.headers['x-kiosk-version'], '');
     let body = fs.readFileSync(LIVE);
     {
@@ -491,6 +615,7 @@ async function handle(req, res) {
       if (body.type === 'payment_completed') dev.session.completed++;
       if (!body.deviceId) body.deviceId = dev.session.id;
     }
+    if (body && body.mode === 'production') return send(res, 400, { error: 'الأحداث الفعلية غير مفعّلة (لا يوجد نظام دفع فعلي)', code: 'production_disabled' }, { 'Access-Control-Allow-Origin': '*' });
     return send(res, recordEvent(body) ? 200 : 400, { ok: true }, { 'Access-Control-Allow-Origin': '*' });
   }
   if (p.startsWith('/uploads/')) {
@@ -531,7 +656,7 @@ async function handle(req, res) {
 
     if (p === '/api/admin/catalog' && m === 'GET') {
       const draft = readJson(DRAFT), live = readJson(LIVE);
-      return send(res, 200, { catalog: draft, hasUnpublished: !sameContent(draft, live), liveUpdatedAt: live.updatedAt });
+      return send(res, 200, { catalog: draft, hasUnpublished: !sameContent(draft, live), liveUpdatedAt: live.updatedAt, liveRelease: Number(live.release) || 0 });
     }
     if (p === '/api/admin/catalog' && m === 'PUT') {
       if (!can(who, 'edit')) return forbid(res, who, req);
@@ -545,34 +670,74 @@ async function handle(req, res) {
       writeJsonAtomic(DRAFT, catalog);
       return send(res, 200, { catalog, warnings, hasUnpublished: !sameContent(catalog, readJson(LIVE)) });
     }
+    if (p === '/api/admin/preflight' && m === 'GET') return send(res, 200, preflight());
     if (p === '/api/admin/publish' && m === 'POST') {
       if (!can(who, 'publish')) return forbid(res, who, req);
       const draft = readJson(DRAFT);
       const { catalog, errors, warnings } = normalize(draft);
-      if (errors.length) return send(res, 422, { error: 'لا يمكن النشر', errors, warnings });
-      const prev = fs.readFileSync(LIVE);
-      const pubChanges = diffSummary(JSON.parse(prev.toString('utf8')), catalog);
-      audit(who, 'publish', pubChanges.length ? pubChanges.slice(0, 8).join('، ') : 'نشر بلا تغييرات في المحتوى', { ip: ip(req) });
-      fs.writeFileSync(path.join(HISTORY_DIR, new Date().toISOString().replace(/[:.]/g, '-') + '.json'), prev);
-      writeJsonAtomic(LIVE, catalog);
-      writeJsonAtomic(DRAFT, catalog);
+      if (errors.length) { audit(who, 'publish_failed', errors.slice(0, 3).join('، '), { ip: ip(req), result: 'failed' }); return send(res, 422, { error: 'لا يمكن النشر', errors, warnings }); }
+      const blockers = preflight().checks.filter((c) => c.status === 'error' && c.id !== 'structure');
+      if (blockers.length) {
+        const errs = blockers.flatMap((c) => c.items.map((i) => `${c.title === 'ملفات الصور موجودة' ? 'ملف الصورة مفقود' : c.title}: ${i.label}`));
+        audit(who, 'publish_failed', errs.slice(0, 3).join('، '), { ip: ip(req), result: 'failed' });
+        return send(res, 422, { error: 'لا يمكن النشر', errors: errs, warnings });
+      }
+      const prevText = fs.readFileSync(LIVE, 'utf8'); const liveObj = JSON.parse(prevText);
+      // الضغط المتكرر أو النشر بلا تغيير: لا إصدار جديد
+      if (sameContent(catalog, liveObj)) return send(res, 200, { ok: true, unchanged: true, release: Number(liveObj.release) || 0, publishedAt: liveObj.updatedAt, warnings });
+      const release = Math.max(Number(liveObj.release) || 0, ...readReleases().map((x) => x.version)) + 1;
+      const changes = diffSummary(liveObj, catalog);
+      const historyId = new Date().toISOString().replace(/[:.]/g, '-');
+      const histFile = path.join(HISTORY_DIR, historyId + '.json');
+      try {
+        fs.writeFileSync(histFile, prevText);                  // 1) نسخة احتياطية من المنشور الحالي
+        const next = { ...catalog, release };
+        writeJsonAtomic(LIVE, next);                           // 2) المنشور الجديد (ذرّي: كامل أو لا شيء)
+        const d2 = { ...next }; delete d2.release; writeJsonAtomic(DRAFT, d2); // 3) المسودة = المنشور
+      } catch (e) {
+        try { fs.unlinkSync(histFile); } catch { /* */ }
+        audit(who, 'publish_failed', `خطأ كتابة: ${e.message}`, { ip: ip(req), result: 'failed' });
+        throw Object.assign(new Error('تعذّر النشر — لم يتغير المنشور'), { status: 500 });
+      }
+      writeJsonAtomic(RELEASES, [{ version: release, at: new Date().toISOString(), role: who.role, historyId, changes: changes.slice(0, 40), changesCount: changes.length }, ...readReleases()].slice(0, 200));
+      audit(who, 'publish', `الإصدار ${release}: ` + (changes.length ? changes.slice(0, 8).join('، ') : 'بلا تغييرات في المحتوى'), { ip: ip(req) });
       const files = fs.readdirSync(HISTORY_DIR).sort();
       for (const f of files.slice(0, Math.max(0, files.length - 30))) fs.unlinkSync(path.join(HISTORY_DIR, f));
-      return send(res, 200, { ok: true, publishedAt: catalog.updatedAt, warnings });
+      return send(res, 200, { ok: true, release, publishedAt: catalog.updatedAt, warnings });
     }
+    if (p === '/api/admin/discard' && m === 'POST') {
+      if (!can(who, 'edit')) return forbid(res, who, req);
+      const live = readJson(LIVE); const d2 = { ...live }; delete d2.release;
+      writeJsonAtomic(DRAFT, d2);
+      audit(who, 'discard', 'تجاهل تعديلات المسودة غير المنشورة والعودة للمنشور', { ip: ip(req) });
+      return send(res, 200, { catalog: d2 });
+    }
+    if (p === '/api/admin/releases' && m === 'GET') return send(res, 200, { release: liveRelease(), releases: readReleases().slice(0, 50) });
     if (p === '/api/admin/history' && m === 'GET') {
-      const list = fs.readdirSync(HISTORY_DIR).filter((f) => f.endsWith('.json')).sort().reverse()
-        .map((f) => ({ id: f.replace(/\.json$/, ''), at: f.replace(/\.json$/, '').replace(/^(\d{4}-\d\d-\d\dT\d\d)-(\d\d)-(\d\d)-(\d+)Z$/, '$1:$2:$3.$4Z') }));
+      const rel = readReleases();
+      const list = fs.readdirSync(HISTORY_DIR).filter((f) => f.endsWith('.json')).sort().reverse().map((f) => {
+        const id = f.replace(/\.json$/, ''); let release = 0;
+        try { release = Number(readJson(path.join(HISTORY_DIR, f)).release) || 0; } catch { /* */ }
+        const by = rel.find((x) => x.historyId === id);
+        return { id, at: id.replace(/^(\d{4}-\d\d-\d\dT\d\d)-(\d\d)-(\d\d)-(\d+)Z$/, '$1:$2:$3.$4Z'), release, replacedBy: by ? { version: by.version, at: by.at, role: by.role, changesCount: by.changesCount } : null };
+      });
       return send(res, 200, { history: list });
+    }
+    const hm = /^\/api\/admin\/history\/([\w\-]+)$/.exec(p);
+    if (hm && m === 'GET') {
+      const f = within(HISTORY_DIR, `${hm[1]}.json`);
+      if (!f || !fs.existsSync(f)) return send(res, 404, { error: 'النسخة غير موجودة' });
+      return send(res, 200, { id: hm[1], catalog: readJson(f) });
     }
     if (p === '/api/admin/restore' && m === 'POST') {
       if (!can(who, 'publish')) return forbid(res, who, req);
       const { id } = await readJsonBody(req, 4096);
       const f = within(HISTORY_DIR, `${id}.json`);
       if (!f || !fs.existsSync(f)) return send(res, 404, { error: 'النسخة غير موجودة' });
-      const { catalog } = normalize(readJson(f));
+      const snap = readJson(f);
+      const { catalog } = normalize(snap);
       writeJsonAtomic(DRAFT, catalog);
-      audit(who, 'restore', `استعادة نسخة ${id} إلى المسودة`, { ip: ip(req) });
+      audit(who, 'restore', `استعادة النسخة ${Number(snap.release) ? 'رقم ' + snap.release + ' ' : ''}(${id}) إلى المسودة — لم تُنشر بعد`, { ip: ip(req) });
       return send(res, 200, { catalog });
     }
     if (p === '/api/admin/upload' && m === 'POST') {
@@ -584,9 +749,16 @@ async function handle(req, res) {
       const name = `${base}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
       fs.writeFileSync(path.join(UPLOADS_DIR, name), buf);
       audit(who, 'upload', `رفع صورة ${name} (${Math.round(buf.length / 1024)}KB)`, { ip: ip(req) });
-      return send(res, 200, { url: `/uploads/${name}` });
+      return send(res, 200, { url: `/uploads/${name}`, size: buf.length, ...(imageSize(buf) || {}) });
     }
     if (p === '/api/admin/media' && m === 'GET') return send(res, 200, { media: listMedia() });
+    if (p === '/api/admin/media' && m === 'DELETE' && url.searchParams.get('unused') === '1') {
+      if (!can(who, 'media_delete')) return forbid(res, who, req);
+      const gone = listMedia().filter((x) => !x.usedBy.length);
+      for (const x of gone) fs.unlinkSync(path.join(UPLOADS_DIR, x.name));
+      audit(who, 'media_cleanup', `تنظيف ${gone.length} صورة غير مستخدمة`, { ip: ip(req) });
+      return send(res, 200, { ok: true, deleted: gone.length });
+    }
     if (p === '/api/admin/media' && m === 'DELETE') {
       if (!can(who, 'media_delete')) return forbid(res, who, req);
       const name = path.basename(String(url.searchParams.get('name') || ''));
@@ -596,6 +768,18 @@ async function handle(req, res) {
       if (used && used.size) return send(res, 409, { error: 'الصورة مستخدمة ولا يمكن حذفها', usedBy: [...used] });
       fs.unlinkSync(f); audit(who, 'media_delete', `حذف صورة ${name}`, { ip: ip(req) });
       return send(res, 200, { ok: true });
+    }
+    if (p === '/api/admin/ops' && m === 'GET') return send(res, 200, buildOps());
+    const dm = /^\/api\/admin\/devices\/([\w-]{1,24})$/.exec(p);
+    if (dm && m === 'GET') {
+      if (!can(who, 'devices')) return forbid(res, who, req);
+      const dev = knownDevices().find((d) => d.deviceId === dm[1]);
+      if (!dev) return send(res, 404, { error: 'الجهاز غير موجود' });
+      const mine = sessions().filter((x) => x.deviceId === dm[1]);
+      const log = mine.flatMap((x) => (x.log || []).map((e) => ({ ...e, session: x.id }))).sort((a, b2) => b2.at.localeCompare(a.at)).slice(0, 60);
+      const draft = readJson(DRAFT);
+      const restricted = [...(draft.programs || []).map((o) => ['program', o]), ...(draft.catalogs || []).map((o) => ['catalog', o])].filter(([, o]) => (o.kiosks || []).includes(dm[1])).map(([t, o]) => ({ type: t, id: o.id, label: nameOf(o) }));
+      return send(res, 200, { device: dev, sessions: mine.map((x) => ({ id: x.id, status: x.status, kioskName: x.kioskName, label: x.label, createdAt: x.createdAt, activatedAt: x.activatedAt, endedAt: x.endedAt, started: x.started, completed: x.completed })), log, restricted, liveRelease: liveRelease() });
     }
     if (p === '/api/admin/live' && m === 'GET') return send(res, 200, readJson(LIVE)); // المنشور كاملاً (للوحة)
     if (p === '/api/admin/devices' && m === 'GET') return send(res, 200, { devices: knownDevices() });
@@ -617,7 +801,7 @@ async function handle(req, res) {
       if (!s) return send(res, 404, { error: 'الجلسة غير موجودة' });
       if (m === 'POST' && sm[2] === 'end') {
         if (s.status === 'ended') return send(res, 200, { session: s });
-        s.status = 'ended'; s.endedAt = new Date().toISOString(); saveSessionsSoon(true);
+        s.status = 'ended'; s.endedAt = new Date().toISOString(); sessionLog(s, 'ended', 'أنهيت من اللوحة'); saveSessionsSoon(true);
         audit(who, 'session_end', `إنهاء جلسة الكيوسك «${s.kioskName || s.label || s.id}»`, { ip: ip(req) });
         return send(res, 200, { session: s });
       }
@@ -625,7 +809,7 @@ async function handle(req, res) {
         const body = await readJsonBody(req, 2048);
         if (body.kioskName !== undefined) s.kioskName = cleanText(body.kioskName, 40);
         if (body.label !== undefined) s.label = cleanText(body.label, 60);
-        saveSessionsSoon(true); audit(who, 'session_rename', `تعديل بيانات الكيوسك «${s.kioskName || s.id}»`, { ip: ip(req) });
+        sessionLog(s, 'renamed', `الاسم: ${s.kioskName || '—'} · المكان: ${s.label || '—'}`); saveSessionsSoon(true); audit(who, 'session_rename', `تعديل بيانات الكيوسك «${s.kioskName || s.id}»`, { ip: ip(req) });
         return send(res, 200, { session: s });
       }
       if (m === 'DELETE' && !sm[2]) {
@@ -646,7 +830,7 @@ async function handle(req, res) {
     if (p === '/api/admin/dashboard' && m === 'GET') {
       if (!can(who, 'stats')) return forbid(res, who, req);
       const range = ['today', '7', '30', 'all'].includes(url.searchParams.get('range')) ? url.searchParams.get('range') : '7';
-      return send(res, 200, buildDashboard(range));
+      return send(res, 200, buildDashboard(range, url.searchParams.get('mode') === 'production' ? 'production' : 'simulation'));
     }
     if (p === '/api/admin/stats' && m === 'DELETE') {
       if (!can(who, 'publish')) return forbid(res, who, req);
