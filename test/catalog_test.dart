@@ -688,6 +688,7 @@ void main() {
       expect(events[1]['programId'], 'z');
       expect(events[2]['amount'], 40);
       expect(events[4]['amount'], 40);
+      expect(events.every((e) => e['mode'] == 'simulation'), isTrue);
       expect(events[4].containsKey('catalogId'), isFalse);
       expect(events.every((e) => !e.containsKey('name')), isTrue);
     });

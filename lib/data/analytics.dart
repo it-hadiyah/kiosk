@@ -50,6 +50,8 @@ class Analytics {
     unawaited(
       _send(Uri.parse('$baseUrl/api/events'), {
         'type': type,
+        // كل ما يرسله هذا التطبيق محاكاة؛ الأحداث الفعلية تتطلب ربط نظام دفع معتمد
+        'mode': 'simulation',
         'programId': ?programId,
         'catalogId': ?catalogId,
         'amount': ?amount,
