@@ -508,16 +508,22 @@ async function main() {
     ok(actRes.status === 200 && act.token, 'kiosk activates with session id + name');
     await page.click('[data-act=ov-refresh]').catch(() => {});
     await tab('overview'); await tab('devices');
-    await page.waitForSelector('.scard.active');
-    const cardTxt = await page.textContent('.scard.active');
-    ok(cardTxt.includes('كيوسك المدخل') && cardTxt.includes('3.2.1') && cardTxt.includes('نشط'), 'active session card: name, version, status');
+    await page.waitForSelector('.dcard');
+    const cardTxt = await page.textContent('.dcard');
+    ok(cardTxt.includes('كيوسك المدخل') && cardTxt.includes('3.2.1') && cardTxt.includes('متصل') && cardTxt.includes('بهو الفرع'), 'device card: name, place, version, connection status');
+    await page.click('.dcard [data-act=dev-open]');
+    await page.waitForSelector('#devDlg[open]');
+    const detTxt = await page.textContent('#devDlg');
+    ok(detTxt.includes('سجل المزامنة') && detTxt.includes('تفعيل الجهاز') && detTxt.includes('e2e-dev'), 'device details: sync log with activation + device id');
+    ok(detTxt.includes('سجل أخطاء التطبيق') && detTxt.includes('غير متاح'), 'device details: app error log honestly marked unavailable');
+    await page.click('#devDlg [data-dclose] >> nth=-1'); await page.waitForFunction(() => !document.querySelector('#devDlg'));
     await shot('11-devices');
     // إعادة تسمية
-    await page.click('.scard.active [data-act=sess-rename]');
+    await page.click('.dcard [data-act=sess-rename]');
     await page.waitForSelector('#askDlg[open]');
     await page.fill('#ask0', 'المدخل الرئيسي');
     await page.click('#askDlg button[value=yes]');
-    await page.waitForFunction(() => document.querySelector('.scard.active .sc-name').textContent.includes('المدخل الرئيسي'));
+    await page.waitForFunction(() => document.querySelector('.dcard .sc-name').textContent.includes('المدخل الرئيسي'));
     ok(true, 'kiosk renamed from the panel');
     // أرى الكيوسك في «نظرة عامة»
     await tab('overview');
@@ -525,12 +531,15 @@ async function main() {
     ok(true, 'overview lists the activated kiosk by name');
     // إنهاء الجلسة ← الكيوسك يُبلَّغ
     await tab('devices');
-    await page.click('.scard.active [data-act=sess-end]'); await confirmYes();
-    await page.waitForSelector('.scard.ended');
+    await page.click('.dcard [data-act=sess-end]');
+    ok((await page.textContent('#dlgMsg')).includes('سيعود الكيوسك إلى شاشة التفعيل'), 'ending a session asks for explicit confirmation explaining the effect');
+    await confirmYes();
+    await page.waitForSelector('[data-region=devEnded] summary');
     const after = await fetch(BASE + '/api/catalog', { headers: { 'X-Kiosk-Token': act.token } });
     ok(after.status === 401 && (await after.json()).code === 'session_ended', 'ended session → kiosk gets 401 session_ended');
-    await page.click('.scard.ended [data-act=sess-del]'); await confirmYes();
-    await page.waitForFunction(() => !document.querySelector('.scard.ended'));
+    await page.click('[data-region=devEnded] summary');
+    await page.click('[data-region=devEnded] [data-act=sess-del]'); await confirmYes();
+    await page.waitForFunction(() => !document.querySelector('[data-region=devEnded] [data-act=sess-del]'));
     ok(true, 'ended session record deleted');
 
     /* ---------- ظهور البرنامج حسب الجهاز ---------- */

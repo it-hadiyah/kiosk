@@ -192,34 +192,11 @@ Object.assign(actions, {
 /* ---------- الأجهزة: جلسات الكيوسكات ---------- */
 const fmtCode = (c) => String(c || '').replace(/^(\d{4})(\d{4})$/, '$1-$2');
 const SESS_STATUS = { pending: ['بانتظار التفعيل', 'off'], active: ['نشط', 'kind'], ended: ['منتهية', 'off'] };
-function viewDevices() {
-  return `<div class="page-h"><div><h2>الأجهزة</h2><p class="muted">كل كيوسك يُفعَّل بمعرف جلسة تنشئه من هنا، ويُسمّى عند التفعيل. عند نقل الكيوسك إلى مكان آخر أنهِ جلسته وافتح له جلسة جديدة.</p></div>
-    ${can('devices') ? `<button class="btn primary" type="button" data-act="sess-new">${ic('plus')}فتح جلسة جديدة</button>` : ''}</div>
-  <section class="card steps"><h3>كيف أفعّل كيوسكاً؟</h3><ol><li>اضغط «فتح جلسة جديدة» (واكتب مكان الكيوسك إن أردت).</li><li>يظهر <b>معرف الجلسة</b> من 8 أرقام.</li><li>افتح التطبيق على الكيوسك، وأدخل المعرف مع <b>اسم الكيوسك</b> ثم «تفعيل».</li></ol></section>
-  <div data-region="devList"></div>`;
-}
-regions.devList = () => {
-  if (!ui.sessions) return `<p class="muted">${ui.sessErr ? esc(ui.sessErr) : 'جارٍ التحميل…'}</p>`;
-  if (!ui.sessions.length) return `<div class="empty">${ic('monitor')}<strong>لا توجد جلسات بعد</strong><p>اضغط «فتح جلسة جديدة» لتفعيل أول كيوسك.</p></div>`;
-  return `<div class="sgrid">${ui.sessions.map((x) => {
-    const on = x.status === 'active' && x.lastSeen && Date.now() - new Date(x.lastSeen).getTime() < 3 * 60 * 1000;
-    const [stTxt, stCls] = SESS_STATUS[x.status] || ['—', 'off'];
-    const expired = x.status === 'pending' && Date.parse(x.codeExpiresAt) < Date.now();
-    return `<article class="scard ${esc(x.status)}"><div class="sc-h"><span class="dot ${on ? 'on' : 'off'}" aria-hidden="true"></span>
-      <strong class="sc-name">${esc(x.kioskName || (x.status === 'pending' ? 'كيوسك جديد' : '—'))}</strong><span class="badge ${stCls}">${esc(expired ? 'انتهت صلاحية المعرف' : stTxt)}</span></div>
-      ${x.label ? `<div class="muted">المكان: ${esc(x.label)}</div>` : ''}
-      <div class="sc-code"><span>معرف الجلسة</span><b dir="ltr">${esc(fmtCode(x.code))}</b>${x.status === 'pending' && !expired ? `<button class="btn small" type="button" data-act="sess-copy" data-code="${esc(x.code)}">نسخ</button>` : ''}</div>
-      ${x.status === 'pending' ? `<p class="hint">${expired ? 'أنشئ جلسة جديدة' : 'أدخله في الكيوسك قبل ' + esc(fmtDate(x.codeExpiresAt))}</p>` : ''}
-      ${x.status === 'active' ? `<div class="muted small">آخر اتصال ${esc(ago(x.lastSeen))} · إصدار ${esc(x.version || '—')}</div><div class="muted small">جلسات المحاكاة ${nf(x.started || 0)} · المكتملة ${nf(x.completed || 0)} · فُعّل ${esc(ago(x.activatedAt))}</div>` : ''}
-      ${x.status === 'ended' ? `<div class="muted small">انتهت ${esc(ago(x.endedAt))}${x.kioskName ? '' : ''}</div>` : ''}
-      <div class="btnrow tight">${can('devices') ? `${x.status !== 'ended' ? `<button class="btn small" type="button" data-act="sess-rename" data-id="${esc(x.id)}">${ic('edit')}تعديل</button>` : ''}
-        ${x.status !== 'ended' ? `<button class="btn small danger-o" type="button" data-act="sess-end" data-id="${esc(x.id)}">${x.status === 'pending' ? 'إلغاء المعرف' : 'إنهاء الجلسة'}</button>` : `<button class="btn small danger-o" type="button" data-act="sess-del" data-id="${esc(x.id)}">${ic('trash')}حذف</button>`}` : ''}</div></article>`;
-  }).join('')}</div>`;
-};
 async function loadSessions(force) {
   if (!feat('devices') || !can('devices')) return;
   try { ui.sessions = await backend.sessions(); ui.sessErr = ''; } catch (e) { if (!ui.sessions) ui.sessErr = e.message || 'تعذّر تحميل الجلسات'; }
   if (backend.devices) { try { ui.devs = await backend.devices(); } catch (e) { /* يبقى */ } }
+  if (typeof loadOps === 'function') await loadOps(true);
   ui.forceRegions = !!force; refreshRegions(); ui.forceRegions = false;
 }
 function askFields(title, fields, okLabel = 'حفظ') {

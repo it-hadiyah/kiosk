@@ -119,7 +119,7 @@ regions.ovDevices = () => {
   const devs = ui.ops.devices; const rel = ui.ops.liveRelease;
   const rows = devs.map((d) => {
     const st = d.status !== 'active' ? ['جلسته منتهية', 'off'] : (d.online ? ['متصل', 'on'] : ['غير متصل', 'bad']);
-    const sync = d.status !== 'active' ? '—' : (!rel ? (d.contentSyncedAt ? 'مُزامَن' : '—') : (d.contentRelease === rel ? `<span class="ok-line small">${ic('check')}الإصدار ${rel}</span>` : `<span class="warn-line small">الإصدار ${d.contentRelease || 'القديم'}${d.behind ? ' — متأخر' : ''}</span>`));
+    const sync = d.status !== 'active' ? '—' : (!d.contentSyncedAt ? '<span class="muted small">لم يجلب بعد</span>' : !rel ? 'مُزامَن' : (d.contentRelease === rel ? `<span class="ok-line small">${ic('check')}الإصدار ${rel}</span>` : `<span class="warn-line small">الإصدار ${d.contentRelease || 'القديم'}${d.behind ? ' — متأخر' : ''}</span>`));
     return `<tr><td><span class="dot ${st[1]}" aria-hidden="true"></span> <button type="button" class="linkbtn" data-act="open-device" data-id="${esc(d.deviceId)}">${esc(d.name || d.deviceId)}</button>${d.label ? `<div class="muted small">${esc(d.label)}</div>` : ''}</td><td>${st[0]}</td><td>${esc(ago(d.lastSeen))}</td><td dir="ltr" class="nm">${esc(d.version || '—')}</td><td>${sync}</td><td class="nm">${d.alerts.length ? `<span class="count warn">${nf(d.alerts.length)}</span>` : ''}</td></tr>`;
   }).join('');
   return `<section class="card"><div class="card-h"><h3>الأجهزة <span class="count">${nf(devs.length)}</span></h3>${can('devices') ? `<button class="btn small" type="button" data-act="tab" data-tab="devices">إدارة الأجهزة</button>` : ''}</div>

@@ -571,3 +571,13 @@ details.details[open] > summary { margin-bottom: var(--s3); }
 .meta dt { color: var(--muted); font-size: var(--fs-sm); } .meta dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
 .urlcell { font-size: var(--fs-xs); }
 @media (max-width: 640px) { .mdet { grid-template-columns: 1fr; } }
+
+/* ===== مركز الأجهزة ===== */
+.dcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
+.dcard.err { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+.meta.compact { gap: var(--s1) var(--s4); font-size: var(--fs-sm); }
+.dalerts { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.sev-chip { font-size: var(--fs-xs); padding: 2px 10px; border-radius: 99px; background: var(--card2); border: 1px solid var(--line); }
+.sev-chip.error { background: var(--danger-soft); color: var(--danger); border-color: transparent; } .sev-chip.warn { background: var(--warn-soft); color: var(--warn-ink); border-color: transparent; } .sev-chip.info { background: var(--info-soft); color: var(--info-ink); border-color: transparent; }
+.ddet { gap: var(--s4); align-items: start; }
+.dlg.wide h4 { margin: var(--s4) 0 var(--s2); }
