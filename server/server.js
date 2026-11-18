@@ -51,6 +51,8 @@ function loadSecret() {
   return v;
 }
 const SECRET = loadSecret();
+/** كلمة مرور ضعيفة: أقل من 8 خانات أو رقمية فقط أو شائعة. */
+const weakPassword = (v) => String(v).length < 8 || /^\d+$/.test(String(v)) || ['password', 'admin123', 'qwerty123'].includes(String(v).toLowerCase());
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 
 // ---------- تجهيز البيانات ----------
@@ -105,6 +107,11 @@ function noteFailure(ip) {
   if (!f || f.until < Date.now()) failures.set(ip, { n: 1, until: Date.now() + 60_000 });
   else f.n++;
 }
+// تنظيف دوري لخرائط تحديد المعدل كي لا تنمو بلا حد
+setInterval(() => {
+  const now = Date.now();
+  for (const m of [failures, actFail, evBucket]) for (const [k, v] of m) if ((v.until || v.reset || 0) < now) m.delete(k);
+}, 5 * 60_000).unref();
 function safeEqual(a, b) {
   const ha = crypto.createHash('sha256').update(String(a)).digest();
   const hb = crypto.createHash('sha256').update(String(b)).digest();
@@ -117,12 +124,16 @@ const MIME = {
   '.json': 'application/json; charset=utf-8', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
   '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
 };
+// ترويسات أمان عامة. الصفحات الثابتة للوحة تضيف CSP صارمة.
+const SEC_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()', 'Cross-Origin-Opener-Policy': 'same-origin' };
+const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
 function send(res, code, body, headers = {}) {
   const isBuf = Buffer.isBuffer(body);
   const data = isBuf ? body : typeof body === 'string' ? body : JSON.stringify(body);
   res.writeHead(code, {
     'Content-Type': isBuf || typeof body === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8',
-    'X-Content-Type-Options': 'nosniff',
+    ...SEC_HEADERS,
+    ...(headers['Access-Control-Allow-Origin'] ? {} : { 'Cache-Control': 'no-store' }),
     ...headers,
   });
   res.end(data);
@@ -148,7 +159,7 @@ function serveFile(req, res, file, extra = {}) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return send(res, 404, { error: 'غير موجود' });
     const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'X-Content-Type-Options': 'nosniff', ...extra });
+    res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, ...SEC_HEADERS, ...extra });
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);
   });
@@ -167,15 +178,18 @@ function sniffImage(buf) {
 }
 
 // ---------- سجل التدقيق ----------
+const AUDIT_MAX_BYTES = 5 * 1024 * 1024;
+/** سجل التدقيق: من (الدور) · ماذا · متى · النتيجة (ok / failed / denied). لا تُكتب فيه أسرار. */
 function audit(who, action, summary, extra = {}) {
   try {
-    const line = JSON.stringify({ at: new Date().toISOString(), role: who && who.role || '-', ip: extra.ip || '', action, summary: String(summary || '').slice(0, 400) });
+    try { if (fs.statSync(AUDIT).size > AUDIT_MAX_BYTES) fs.renameSync(AUDIT, AUDIT + '.1'); } catch { /* لا ملف بعد */ }
+    const line = JSON.stringify({ at: new Date().toISOString(), role: who && who.role || '-', ip: extra.ip || '', action, result: extra.result || 'ok', summary: String(summary || '').slice(0, 400) });
     fs.appendFileSync(AUDIT, line + '\n');
   } catch (e) { console.error('audit failed', e.message); }
 }
 function readAudit(limit = 200) {
-  if (!fs.existsSync(AUDIT)) return [];
-  const lines = fs.readFileSync(AUDIT, 'utf8').split('\n').filter(Boolean).slice(-limit).reverse();
+  const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').filter(Boolean) : []);
+  const lines = [...read(AUDIT + '.1'), ...read(AUDIT)].slice(-limit).reverse();
   return lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
 }
 const nameOf = (o) => (o && o.title && (o.title.ar || o.title.en)) || (o && o.id) || '?';
@@ -416,7 +430,7 @@ function auth(req) {
   return { role: ROLE_CAN[t.role] ? t.role : 'viewer', exp: t.exp };
 }
 const can = (who, perm) => !!who && ROLE_CAN[who.role].has(perm);
-const forbid = (res) => send(res, 403, { error: 'ليست لديك صلاحية لهذا الإجراء' });
+const forbid = (res, who, req) => { if (who && req) audit(who, 'denied', `محاولة غير مصرّح بها: ${req.method} ${new URL(req.url, 'http://x').pathname}`, { ip: ip(req), result: 'denied' }); return send(res, 403, { error: 'ليست لديك صلاحية لهذا الإجراء' }); };
 const ip = (req) => req.socket.remoteAddress || '?';
 
 async function handle(req, res) {
@@ -495,7 +509,7 @@ async function handle(req, res) {
       const pw = getPw();
       if (pw && safeEqual(body.password ?? '', pw)) { role = rname; break; }
     }
-    if (!role) { noteFailure(who); audit(null, 'login_failed', 'محاولة دخول فاشلة', { ip: who }); return send(res, 401, { error: 'كلمة المرور غير صحيحة' }); }
+    if (!role) { noteFailure(who); audit(null, 'login_failed', 'محاولة دخول فاشلة', { ip: who, result: 'failed' }); return send(res, 401, { error: 'كلمة المرور غير صحيحة' }); }
     failures.delete(who);
     const exp = Date.now() + TOKEN_TTL_MS;
     audit({ role }, 'login', 'تسجيل دخول', { ip: who });
@@ -506,14 +520,21 @@ async function handle(req, res) {
   if (p.startsWith('/api/admin/')) {
     const who = auth(req);
     if (!who) return send(res, 401, { error: 'يلزم تسجيل الدخول' });
-    if (p === '/api/admin/me') return send(res, 200, { role: who.role, can: [...ROLE_CAN[who.role]] });
+    if (p === '/api/admin/me') {
+      const out = { role: who.role, can: [...ROLE_CAN[who.role]] };
+      if (who.role === 'super') {
+        const configured = ROLE_PASSWORDS.map(([n, g]) => [n, g()]).filter(([, v]) => v);
+        out.security = { weakPasswordRoles: configured.filter(([, v]) => weakPassword(v)).map(([n]) => n), rolesConfigured: configured.map(([n]) => n), https: !!(req.socket.encrypted || req.headers['x-forwarded-proto'] === 'https'), generatedAdminPassword: generatedPassword, tokenHours: TOKEN_TTL_MS / 3_600_000 };
+      }
+      return send(res, 200, out);
+    }
 
     if (p === '/api/admin/catalog' && m === 'GET') {
       const draft = readJson(DRAFT), live = readJson(LIVE);
       return send(res, 200, { catalog: draft, hasUnpublished: !sameContent(draft, live), liveUpdatedAt: live.updatedAt });
     }
     if (p === '/api/admin/catalog' && m === 'PUT') {
-      if (!can(who, 'edit')) return forbid(res);
+      if (!can(who, 'edit')) return forbid(res, who, req);
       const body = await readJsonBody(req);
       const { catalog, errors, warnings } = normalize(body.catalog ?? body);
       if (errors.length) return send(res, 422, { error: 'بيانات غير صالحة', errors, warnings });
@@ -525,7 +546,7 @@ async function handle(req, res) {
       return send(res, 200, { catalog, warnings, hasUnpublished: !sameContent(catalog, readJson(LIVE)) });
     }
     if (p === '/api/admin/publish' && m === 'POST') {
-      if (!can(who, 'publish')) return forbid(res);
+      if (!can(who, 'publish')) return forbid(res, who, req);
       const draft = readJson(DRAFT);
       const { catalog, errors, warnings } = normalize(draft);
       if (errors.length) return send(res, 422, { error: 'لا يمكن النشر', errors, warnings });
@@ -545,7 +566,7 @@ async function handle(req, res) {
       return send(res, 200, { history: list });
     }
     if (p === '/api/admin/restore' && m === 'POST') {
-      if (!can(who, 'publish')) return forbid(res);
+      if (!can(who, 'publish')) return forbid(res, who, req);
       const { id } = await readJsonBody(req, 4096);
       const f = within(HISTORY_DIR, `${id}.json`);
       if (!f || !fs.existsSync(f)) return send(res, 404, { error: 'النسخة غير موجودة' });
@@ -555,7 +576,7 @@ async function handle(req, res) {
       return send(res, 200, { catalog });
     }
     if (p === '/api/admin/upload' && m === 'POST') {
-      if (!can(who, 'upload')) return forbid(res);
+      if (!can(who, 'upload')) return forbid(res, who, req);
       const buf = await readBody(req, 6 * 1024 * 1024);
       const ext = sniffImage(buf);
       if (!ext) return send(res, 415, { error: 'الملف ليس صورة مدعومة (jpg / png / webp)' });
@@ -567,7 +588,7 @@ async function handle(req, res) {
     }
     if (p === '/api/admin/media' && m === 'GET') return send(res, 200, { media: listMedia() });
     if (p === '/api/admin/media' && m === 'DELETE') {
-      if (!can(who, 'media_delete')) return forbid(res);
+      if (!can(who, 'media_delete')) return forbid(res, who, req);
       const name = path.basename(String(url.searchParams.get('name') || ''));
       const f = within(UPLOADS_DIR, name);
       if (!name || !f || !fs.existsSync(f)) return send(res, 404, { error: 'الصورة غير موجودة' });
@@ -579,11 +600,11 @@ async function handle(req, res) {
     if (p === '/api/admin/live' && m === 'GET') return send(res, 200, readJson(LIVE)); // المنشور كاملاً (للوحة)
     if (p === '/api/admin/devices' && m === 'GET') return send(res, 200, { devices: knownDevices() });
     if (p === '/api/admin/sessions' && m === 'GET') {
-      if (!can(who, 'devices')) return forbid(res);
+      if (!can(who, 'devices')) return forbid(res, who, req);
       return send(res, 200, { sessions: sessions() });
     }
     if (p === '/api/admin/sessions' && m === 'POST') {
-      if (!can(who, 'devices')) return forbid(res);
+      if (!can(who, 'devices')) return forbid(res, who, req);
       const body = await readJsonBody(req, 2048);
       const s = createSession(body.label);
       audit(who, 'session_create', `فتح جلسة كيوسك جديدة${s.label ? ' — ' + s.label : ''}`, { ip: ip(req) });
@@ -591,7 +612,7 @@ async function handle(req, res) {
     }
     const sm = /^\/api\/admin\/sessions\/(ss_[0-9a-f]{8})(?:\/(end|rename))?$/.exec(p);
     if (sm) {
-      if (!can(who, 'devices')) return forbid(res);
+      if (!can(who, 'devices')) return forbid(res, who, req);
       const s = sessions().find((x) => x.id === sm[1]);
       if (!s) return send(res, 404, { error: 'الجلسة غير موجودة' });
       if (m === 'POST' && sm[2] === 'end') {
@@ -615,20 +636,20 @@ async function handle(req, res) {
       }
     }
     if (p === '/api/admin/audit' && m === 'GET') {
-      if (!can(who, 'audit')) return forbid(res);
+      if (!can(who, 'audit')) return forbid(res, who, req);
       return send(res, 200, { entries: readAudit(Number(url.searchParams.get('limit')) || 200) });
     }
     if (p === '/api/admin/stats' && m === 'GET') {
-      if (!can(who, 'stats')) return forbid(res);
+      if (!can(who, 'stats')) return forbid(res, who, req);
       return send(res, 200, { demo: true, stats: loadStats() });
     }
     if (p === '/api/admin/dashboard' && m === 'GET') {
-      if (!can(who, 'stats')) return forbid(res);
+      if (!can(who, 'stats')) return forbid(res, who, req);
       const range = ['today', '7', '30', 'all'].includes(url.searchParams.get('range')) ? url.searchParams.get('range') : '7';
       return send(res, 200, buildDashboard(range));
     }
     if (p === '/api/admin/stats' && m === 'DELETE') {
-      if (!can(who, 'publish')) return forbid(res);
+      if (!can(who, 'publish')) return forbid(res, who, req);
       stats = freshStats(); saveStatsSoon(); audit(who, 'stats_reset', 'تصفير إحصائيات المحاكاة', { ip: ip(req) });
       return send(res, 200, { ok: true });
     }
@@ -642,7 +663,7 @@ async function handle(req, res) {
     const rel = p.slice('/admin/'.length) || 'index.html';
     const f = within(path.join(PUBLIC_DIR, 'admin'), rel);
     if (!f) return send(res, 400, { error: 'مسار غير صالح' });
-    return serveFile(req, res, f, { 'Cache-Control': 'no-cache', 'X-Frame-Options': 'DENY' });
+    return serveFile(req, res, f, { 'Cache-Control': 'no-cache', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': ADMIN_CSP });
   }
   return send(res, 404, { error: 'غير موجود' });
 }
@@ -662,6 +683,7 @@ if (require.main === module) {
   createServer().listen(PORT, () => {
     console.log(`Hadiyah catalog server on http://localhost:${PORT}  (لوحة التحكم: /admin/)`);
     console.log(`DATA_DIR = ${DATA_DIR}`);
+    for (const [n, g] of ROLE_PASSWORDS) if (g() && weakPassword(g())) console.warn(`تحذير أمني: كلمة مرور الدور «${n}» ضعيفة (استخدم 8 خانات فأكثر وليست أرقاماً فقط).`);
     if (generatedPassword) console.log(`ADMIN_PASSWORD غير مضبوط — كلمة مرور مؤقتة لهذه الجلسة: ${ADMIN_PASSWORD}`);
   });
 }
