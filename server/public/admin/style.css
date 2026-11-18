@@ -458,3 +458,30 @@ body:not(.can-publish) #btnPublish, body:not(.can-publish) [data-act="publish"],
 .sgrid { margin-top: 16px; } .steps { margin-bottom: 0; }
 
 .kl { margin-top: 10px; } .kl .row { justify-content: space-between; }
+
+/* ===== لوحة المؤشرات ===== */
+.dash-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.dash-dev { max-width: 220px; }
+.demo-note { background: var(--warn-soft); color: var(--warn-ink); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
+.kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.dash2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+.dash2 > .card { min-width: 0; }
+.h4gap { margin-top: 16px; }
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 190px; padding-top: 8px; overflow-x: auto; }
+.chcol { flex: 1 1 0; min-width: 14px; display: flex; flex-direction: column; align-items: stretch; height: 100%; }
+.chbars { position: relative; flex: 1; display: flex; align-items: flex-end; justify-content: center; }
+.chbars i { position: absolute; bottom: 0; width: 100%; border-radius: 6px 6px 0 0; min-height: 2px; }
+.b-s { background: var(--brand-line); } .b-c { background: var(--brand-strong); }
+.chbars .b-c { width: 62%; }
+.chl { font-size: 11px; color: var(--muted); text-align: center; height: 16px; white-space: nowrap; }
+.lg { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; }
+.rank { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rank li { display: flex; align-items: center; gap: 10px; }
+.rk { width: 24px; height: 24px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-strong); display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: none; }
+.rank li:first-child .rk { background: var(--brand-strong); color: var(--on-brand); }
+.rk-t { flex: 1 1 120px; min-width: 0; display: flex; flex-direction: column; }
+.rk-t b { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev-t td.nm, .dev-t th { white-space: nowrap; }
+.dev-t td.nm { font-variant-numeric: tabular-nums; }
+.dev-t tr.sel td { background: var(--brand-soft); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--brand-strong); font-weight: 700; text-decoration: underline; cursor: pointer; }

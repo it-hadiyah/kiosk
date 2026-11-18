@@ -98,6 +98,7 @@ const serverBackend = {
   async deleteMedia(name) { return this._req('/api/admin/media?name=' + encodeURIComponent(name), { method: 'DELETE' }); },
   async audit() { return (await this._req('/api/admin/audit')).entries; },
   async stats() { return (await this._req('/api/admin/stats')).stats; },
+  async dashboard(range) { return this._req('/api/admin/dashboard?range=' + encodeURIComponent(range)); },
   async resetStats() { return this._req('/api/admin/stats', { method: 'DELETE' }); },
   async load() { const d = await this._req('/api/admin/catalog'); return { catalog: d.catalog, hasUnpublished: !!d.hasUnpublished, liveUpdatedAt: d.liveUpdatedAt || '' }; },
   async save(catalog) {

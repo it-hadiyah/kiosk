@@ -494,6 +494,43 @@ async function main() {
     eq(await page.evaluate((id) => findProg(id).kiosks, pid), [], 'back to all devices');
     await page.click('#drawer [data-act=close-editor]'); await page.waitForFunction(() => !ui.edit);
 
+    /* ---------- لوحة المؤشرات ---------- */
+    console.log('== dashboard');
+    await adm('DELETE', '/api/admin/stats');
+    const catId = await page.evaluate(() => C().catalogs[0].id);
+    const post = (o) => fetch(BASE + '/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o) });
+    for (const e of [
+      { deviceId: 'e2eA', type: 'session_start' }, { deviceId: 'e2eA', type: 'catalog_opened', catalogId: catId },
+      { deviceId: 'e2eA', type: 'program_selected', programId: 'zakat', catalogId: catId },
+      { deviceId: 'e2eA', type: 'payment_completed', programId: 'zakat', catalogId: catId, amount: 100, durationMs: 9000 },
+      { deviceId: 'e2eA', type: 'payment_completed', programId: 'zakat', amount: 20, durationMs: 9000 },
+      { deviceId: 'e2eB', type: 'session_start' }, { deviceId: 'e2eB', type: 'payment_completed', programId: 'water', amount: 40, durationMs: 5000 },
+      { deviceId: 'e2eB', type: 'session_start' }, { deviceId: 'e2eB', type: 'session_abandoned' },
+    ]) await post(e);
+    await tab('dashboard');
+    await page.waitForSelector('[data-region=dashBody] .kpis');
+    const kpi = await page.textContent('[data-region=dashBody] .kpis');
+    ok(kpi.includes('3') && kpi.includes('160 ر.س'), 'dashboard KPIs: 3 donations and 160 SAR (demo)');
+    ok((await page.textContent('.demo-note')).includes('بيانات تجريبية'), 'dashboard labelled as demo data');
+    const rank = await page.textContent('[data-region=dashBody] .dash2');
+    const waterName = await page.evaluate(() => tt(findProg('water')));
+    ok(rank.includes('الزكاة') && rank.includes(waterName), 'programs ranking lists zakat and water');
+    ok(rank.includes('الأكثر زيارة') && rank.includes('الأكثر تبرعاً'), 'catalogs ranked by visits and by donations');
+    const devTable = await page.textContent('.dev-t');
+    ok(devTable.includes('كيوسك أ') && devTable.includes('كيوسك ب'), 'per-device table lists both kiosks');
+    await shot('13-dashboard');
+    await page.click('.dev-t [data-act=dash-dev][data-id=e2eA]');
+    await page.waitForFunction(() => document.querySelector('[data-region=dashBody]').textContent.includes('«كيوسك أ»'));
+    ok((await page.textContent('[data-region=dashBody] .kpis')).includes('120 ر.س'), 'device scope: kiosk A has 120 SAR');
+    ok(!(await page.$('.dev-t')), 'device table hidden in single-device scope');
+    await page.selectOption('#dashDev', '');
+    await page.waitForSelector('.dev-t');
+    await page.click('[data-act=dash-range][data-v=today]');
+    await page.waitForFunction(() => document.querySelector('[data-act=dash-range][data-v=today]').getAttribute('aria-pressed') === 'true');
+    await page.waitForSelector('[data-region=dashBody] .kpis');
+    ok((await page.textContent('[data-region=dashBody] .kpis')).includes('160 ر.س'), 'range "today" shows the same totals');
+    await adm('DELETE', '/api/admin/stats');
+
     ok(jsErrors.length === 0, 'no JS console/page errors' + (jsErrors.length ? ': ' + jsErrors.join(' | ') : ''));
   } catch (e) {
     fail++; console.log('  ✗ EXCEPTION:', e.stack || e);
