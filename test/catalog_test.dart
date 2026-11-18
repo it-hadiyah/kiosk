@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hadiyah_kiosk/app.dart';
 import 'package:hadiyah_kiosk/data/analytics.dart';
 import 'package:hadiyah_kiosk/data/catalog_service.dart';
+import 'package:hadiyah_kiosk/data/device_session.dart';
 import 'package:hadiyah_kiosk/data/models.dart';
 import 'package:hadiyah_kiosk/l10n/strings.dart';
 import 'package:hadiyah_kiosk/theme/theme.dart';
@@ -719,6 +720,160 @@ void main() {
       await wait(t);
       await t.pump(const Duration(seconds: 8));
       expect(events, ['session_start', 'session_abandoned']);
+    });
+
+    group('kiosk activation (session id + kiosk name)', () {
+      final okCatalog = jsonEncode({
+        'programs': [],
+        'catalogs': [],
+        'home': [],
+      });
+      late Directory dir;
+      late List<String> posts;
+      late int fetchStatus;
+
+      CatalogService svc() => CatalogService(
+        baseUrl: 'http://x:8080',
+        requireActivation: true,
+        cacheDir: dir,
+        refreshEvery: Duration.zero,
+        fetcher: (u, {etag}) async => fetchStatus == 200
+            ? FetchResult(200, body: okCatalog, etag: 'e')
+            : FetchResult(fetchStatus),
+        poster: (u, body, {token}) async {
+          posts.add('${u.path} ${jsonEncode(body)} token=$token');
+          if (u.path.endsWith('/activate')) {
+            if (body['code'] == '12345678') {
+              return HttpReply(200, {
+                'sessionId': 'ss_aaaa1111',
+                'token': 'tok-1',
+                'name': body['name'],
+              });
+            }
+            return const HttpReply(404, {
+              'error': 'معرف الجلسة غير صحيح أو مستخدم',
+              'code': 'invalid_code',
+            });
+          }
+          return const HttpReply(200, {'ok': true});
+        },
+      );
+
+      setUp(() {
+        dir = Directory.systemTemp.createTempSync('hd_act_');
+        posts = [];
+        fetchStatus = 200;
+      });
+
+      testWidgets(
+        'first launch asks for session id + name; activation opens welcome and persists',
+        (t) async {
+          size(t);
+          final s1 = svc();
+          await t.runAsync(s1.init);
+          await t.pumpWidget(KioskApp(catalog: s1));
+          await wait(t);
+          expect(find.byKey(const Key('setup_title')), findsOneWidget);
+          expect(find.byKey(const Key('welcome_donate')), findsNothing);
+
+          // بيانات ناقصة
+          await t.tap(find.byKey(const Key('setup_activate')));
+          await t.pumpAndSettle();
+          expect(find.text('معرف الجلسة 8 أرقام'), findsOneWidget);
+          // معرف خاطئ يعرض رسالة الخادم
+          await t.enterText(find.byKey(const Key('setup_code')), '99999999');
+          await t.enterText(
+            find.byKey(const Key('setup_name')),
+            'كيوسك المدخل',
+          );
+          await t.runAsync(() async {
+            await t.tap(find.byKey(const Key('setup_activate')));
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+          });
+          await t.pumpAndSettle();
+          expect(find.text('معرف الجلسة غير صحيح أو مستخدم'), findsOneWidget);
+          // معرف صحيح
+          await t.enterText(find.byKey(const Key('setup_code')), '12345678');
+          await t.runAsync(() async {
+            await t.tap(find.byKey(const Key('setup_activate')));
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+          });
+          await wait(t);
+          expect(find.byKey(const Key('welcome_donate')), findsOneWidget);
+          expect(s1.session!.name, 'كيوسك المدخل');
+          expect(posts.last, contains('/api/device/activate'));
+          expect(posts.last, contains('كيوسك المدخل'));
+
+          // إعادة تشغيل التطبيق: الجلسة محفوظة فلا تظهر شاشة التفعيل
+          final s2 = svc();
+          await t.runAsync(s2.init);
+          expect(s2.needsSetup, isFalse);
+          expect(s2.session!.sessionId, 'ss_aaaa1111');
+          expect(KioskInfo.token, 'tok-1');
+          KioskInfo.token = '';
+        },
+      );
+
+      testWidgets(
+        'ending the session in the panel (HTTP 401) returns the kiosk to setup',
+        (t) async {
+          size(t);
+          final s1 = svc();
+          await t.runAsync(s1.init);
+          await t.runAsync(
+            () => s1.activate(code: '1234-5678', name: 'كيوسك أ'),
+          );
+          await t.pumpWidget(KioskApp(catalog: s1));
+          await wait(t);
+          expect(find.byKey(const Key('welcome_donate')), findsOneWidget);
+          await t.tap(find.byKey(const Key('welcome_donate'))); // صفحة داخلية
+          await wait(t);
+          // أنهى المدير الجلسة: الخادم يردّ 401 في التحديث التالي
+          fetchStatus = 401;
+          await t.runAsync(s1.refresh);
+          await wait(t);
+          expect(s1.session, isNull);
+          expect(find.byKey(const Key('setup_title')), findsOneWidget);
+          expect(find.byKey(const Key('welcome_donate')), findsNothing);
+          KioskInfo.token = '';
+        },
+      );
+
+      testWidgets(
+        'operator can end the session from the hidden status dialog (moving the kiosk)',
+        (t) async {
+          size(t);
+          final s1 = svc();
+          await t.runAsync(s1.init);
+          await t.runAsync(
+            () => s1.activate(code: '12345678', name: 'كيوسك ب'),
+          );
+          await t.pumpWidget(KioskApp(catalog: s1));
+          await wait(t);
+          for (var i = 0; i < 5; i++) {
+            await t.tap(find.byKey(const Key('secret_corner')));
+          }
+          await wait(t, 300);
+          expect(find.textContaining('كيوسك ب'), findsWidgets);
+          await t.tap(find.byKey(const Key('diag_end_session')));
+          await wait(t, 400);
+          await t.tap(find.byKey(const Key('diag_end_confirm')));
+          await wait(t, 400); // يُغلق الحواران ثم يبدأ إنهاء الجلسة
+          await t.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 600)),
+          );
+          await wait(t, 400);
+          expect(s1.session, isNull);
+          expect(find.byKey(const Key('setup_title')), findsOneWidget);
+          expect(
+            posts.any(
+              (x) => x.contains('/deactivate') && x.contains('token=tok-1'),
+            ),
+            isTrue,
+          );
+          KioskInfo.token = '';
+        },
+      );
     });
 
     testWidgets(

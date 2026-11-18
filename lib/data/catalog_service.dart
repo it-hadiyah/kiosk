@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'analytics.dart';
+import 'device_session.dart';
 import '../theme/theme.dart';
 import 'models.dart';
 
@@ -27,11 +28,18 @@ class CatalogService extends ChangeNotifier {
     Directory? cacheDir,
     CatalogData? initial,
     this.refreshEvery = const Duration(minutes: 1),
+    this.requireActivation = false,
+    JsonPoster? poster,
+    Directory? sessionDir,
   }) : baseUrl = _clean(baseUrl ?? const String.fromEnvironment('CATALOG_URL')),
        _fetcher = fetcher ?? _httpFetch,
        _cacheDir =
            cacheDir ?? Directory('${Directory.systemTemp.path}/hadiyah_cache'),
-       data = initial ?? CatalogData.defaults();
+       data = initial ?? CatalogData.defaults() {
+    if (poster != null) _poster = poster;
+    _sessionDirOverride =
+        sessionDir ?? (cacheDir == null ? _persistentDir() : null);
+  }
 
   /// نسخة للاختبارات: لا شبكة ولا مؤقتات.
   CatalogService.fixed(CatalogData d)
@@ -39,6 +47,7 @@ class CatalogService extends ChangeNotifier {
       _fetcher = _httpFetch,
       _cacheDir = Directory('${Directory.systemTemp.path}/hadiyah_cache_test'),
       refreshEvery = Duration.zero,
+      requireActivation = false,
       data = d;
 
   static String _clean(String s) => s.trim().replaceAll(RegExp(r'/+$'), '');
@@ -47,6 +56,31 @@ class CatalogService extends ChangeNotifier {
   final CatalogFetcher _fetcher;
   final Directory _cacheDir;
   final Duration refreshEvery;
+
+  /// عند التفعيل يطلب التطبيق معرف جلسة واسم كيوسك قبل أول استخدام.
+  final bool requireActivation;
+  JsonPoster _poster = httpPostJson;
+  Directory? _sessionDirOverride;
+
+  /// مجلد بيانات التطبيق على أندرويد (لا يُمسح بـ «مسح الكاش»)، وإلا null.
+  static Directory? _persistentDir() {
+    try {
+      if (Platform.isAndroid) {
+        return Directory('${Directory.systemTemp.parent.path}/hadiyah_session');
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Directory get _sessionDir => _sessionDirOverride ?? _cacheDir;
+  File get _sessionFile => File('${_sessionDir.path}/session.json');
+
+  /// جلسة هذا الكيوسك (null = غير مفعّل).
+  DeviceSession? session;
+
+  /// هل يجب عرض شاشة التفعيل بدل الترحيب؟
+  bool get needsSetup =>
+      requireActivation && baseUrl.isNotEmpty && session == null;
 
   /// إحصائيات المحاكاة التجريبية (تُهمل عند غياب الخادم).
   late Analytics analytics = Analytics(baseUrl);
@@ -64,6 +98,7 @@ class CatalogService extends ChangeNotifier {
     'Last attempt: ${lastAttempt?.toIso8601String() ?? 'never'}',
     'Last result: ${lastStatus ?? '-'}',
     'Last error: ${lastError ?? 'none'}',
+    'Kiosk: ${session == null ? '(not activated)' : '${session!.name} · ${session!.sessionId}'}',
     'Published at: ${data.updatedAt.isEmpty ? '(bundled)' : data.updatedAt}',
     'Programs: ${data.programs.length} · Home tiles: ${data.homeTiles.length}',
   ].join('\n');
@@ -86,11 +121,99 @@ class CatalogService extends ChangeNotifier {
   Future<void> init() async {
     await _loadCached();
     if (baseUrl.isEmpty) return;
-    KioskInfo.deviceId = await Analytics.loadDeviceId(_cacheDir);
+    KioskInfo.deviceId = await Analytics.loadDeviceId(_sessionDir);
+    await _loadSession();
     unawaited(refresh());
     if (refreshEvery > Duration.zero) {
       _timer = Timer.periodic(refreshEvery, (_) => refresh());
     }
+  }
+
+  Future<void> _loadSession() async {
+    try {
+      if (await _sessionFile.exists()) {
+        session = DeviceSession.fromJson(
+          jsonDecode(await _sessionFile.readAsString()),
+        );
+        KioskInfo.token = session?.token ?? '';
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('session file ignored: $e');
+    }
+  }
+
+  /// تفعيل هذا الكيوسك بمعرف الجلسة (8 أرقام من لوحة التحكم) واسم الكيوسك.
+  /// يرمي [ActivationException] برسالة عربية عند الفشل.
+  Future<void> activate({required String code, required String name}) async {
+    final digits = code.replaceAll(RegExp(r'\D'), '');
+    final nm = name.trim();
+    if (digits.length != 8) {
+      throw const ActivationException('bad_code', 'معرف الجلسة 8 أرقام');
+    }
+    if (nm.isEmpty) {
+      throw const ActivationException('bad_name', 'اكتب اسم الكيوسك');
+    }
+    HttpReply r;
+    try {
+      r = await _poster(Uri.parse('$baseUrl/api/device/activate'), {
+        'code': digits,
+        'name': nm,
+        'deviceId': KioskInfo.deviceId,
+        'appVersion': KioskInfo.version,
+      });
+    } catch (e) {
+      throw const ActivationException(
+        'network',
+        'تعذّر الاتصال بالخادم — تأكد من الشبكة ومن أن الخادم يعمل',
+      );
+    }
+    if (r.status != 200 || r.json['token'] is! String) {
+      throw ActivationException(
+        '${r.json['code'] ?? 'error'}',
+        '${r.json['error'] ?? 'تعذّر التفعيل (${r.status})'}',
+      );
+    }
+    session = DeviceSession(
+      sessionId: '${r.json['sessionId'] ?? ''}',
+      token: r.json['token'] as String,
+      name: '${r.json['name'] ?? nm}',
+    );
+    KioskInfo.token = session!.token;
+    try {
+      await _sessionDir.create(recursive: true);
+      await _sessionFile.writeAsString(jsonEncode(session!.toJson()));
+    } catch (e) {
+      debugPrint('session persist failed: $e');
+    }
+    etag = null;
+    notifyListeners();
+    unawaited(refresh());
+  }
+
+  /// ينهي جلسة هذا الكيوسك (نقل الكيوسك): يبلّغ الخادم ثم يعود لشاشة التفعيل.
+  Future<void> endSession() async {
+    final tk = session?.token;
+    if (tk != null && baseUrl.isNotEmpty) {
+      try {
+        await _poster(
+          Uri.parse('$baseUrl/api/device/deactivate'),
+          const {},
+          token: tk,
+        ).timeout(const Duration(seconds: 5));
+      } catch (_) {}
+    }
+    await _clearSession();
+  }
+
+  Future<void> _clearSession() async {
+    session = null;
+    KioskInfo.token = '';
+    etag = null;
+    notifyListeners(); // الواجهة تعود لشاشة التفعيل فوراً
+    try {
+      if (await _sessionFile.exists()) await _sessionFile.delete();
+    } catch (_) {}
   }
 
   Future<void> _loadCached() async {
@@ -115,6 +238,12 @@ class CatalogService extends ChangeNotifier {
     try {
       final r = await _fetcher(Uri.parse('$baseUrl/api/catalog'), etag: etag);
       lastStatus = 'HTTP ${r.status}';
+      if (r.status == 401 && session != null) {
+        // أنهى مدير اللوحة هذه الجلسة: نعود لشاشة التفعيل
+        lastError = 'session ended';
+        await _clearSession();
+        return;
+      }
       if (r.status == 304) {
         lastError = null;
       } else if (r.status == 200 && r.body != null) {
@@ -227,6 +356,9 @@ Future<FetchResult> _httpFetch(Uri url, {String? etag}) async {
   try {
     final req = await c.getUrl(url);
     if (etag != null) req.headers.set(HttpHeaders.ifNoneMatchHeader, etag);
+    if (KioskInfo.token.isNotEmpty) {
+      req.headers.set('X-Kiosk-Token', KioskInfo.token);
+    }
     if (KioskInfo.deviceId.isNotEmpty) {
       req.headers.set('X-Kiosk-Device', KioskInfo.deviceId);
       req.headers.set('X-Kiosk-Version', KioskInfo.version);

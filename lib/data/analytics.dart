@@ -10,6 +10,9 @@ class KioskInfo {
   KioskInfo._();
   static const version = '1.0.0';
   static String deviceId = '';
+
+  /// رمز جلسة هذا الكيوسك (بعد التفعيل).
+  static String token = '';
 }
 
 typedef EventSender = Future<void> Function(Uri url, Map<String, Object?> body);
@@ -51,6 +54,7 @@ class Analytics {
         'durationMs': ?durationMs,
         'lang': ?lang,
         'deviceId': KioskInfo.deviceId,
+        'token': ?(KioskInfo.token.isEmpty ? null : KioskInfo.token),
         'appVersion': KioskInfo.version,
       }).catchError((Object e) => debugPrint('analytics skipped: $e')),
     );

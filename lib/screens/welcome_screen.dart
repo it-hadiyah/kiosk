@@ -59,6 +59,36 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             style: const TextStyle(fontSize: 18, height: 1.6),
           ),
           actions: [
+            if (widget.state.catalog.session != null)
+              TextButton(
+                key: const Key('diag_end_session'),
+                onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      title: const Text('إنهاء جلسة هذا الكيوسك؟'),
+                      content: const Text(
+                        'سيعود الكيوسك لشاشة التفعيل ويحتاج معرف جلسة جديداً من لوحة التحكم (مثلاً عند نقله إلى مكان آخر).',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(c).pop(false),
+                          child: const Text('إلغاء'),
+                        ),
+                        TextButton(
+                          key: const Key('diag_end_confirm'),
+                          onPressed: () => Navigator.of(c).pop(true),
+                          child: const Text('إنهاء الجلسة'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok != true) return;
+                  if (context.mounted) Navigator.of(context).pop();
+                  await widget.state.catalog.endSession();
+                },
+                child: const Text('إنهاء الجلسة (نقل الكيوسك)'),
+              ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('OK'),

@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'data/catalog_service.dart';
 import 'l10n/strings.dart';
+import 'screens/setup_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'state/donation_state.dart';
 import 'theme/theme.dart';
@@ -24,7 +25,8 @@ class KioskApp extends StatefulWidget {
 }
 
 class _KioskAppState extends State<KioskApp> {
-  late final CatalogService _catalog = widget.catalog ?? CatalogService();
+  late final CatalogService _catalog =
+      widget.catalog ?? CatalogService(requireActivation: true);
   late final DonationState _state = DonationState(_catalog);
   final _nav = GlobalKey<NavigatorState>();
   Timer? _idle;
@@ -36,6 +38,7 @@ class _KioskAppState extends State<KioskApp> {
     super.initState();
     _state.addListener(() => setState(() {}));
     _catalog.addListener(_state.touch); // وصل كتالوج جديد ← أعد بناء الشاشات
+    _catalog.addListener(_onCatalogChange);
     if (widget.catalog == null) _catalog.init();
     _resetIdle();
   }
@@ -94,6 +97,15 @@ class _KioskAppState extends State<KioskApp> {
     }
   }
 
+  /// انتهت جلسة الكيوسك (من اللوحة أو منه): أغلق أي صفحات مفتوحة وارجع لشاشة التفعيل.
+  void _onCatalogChange() {
+    if (_catalog.needsSetup) {
+      _state.reset();
+      if (_warning) _warning = false;
+      _nav.currentState?.popUntil((r) => r.isFirst);
+    }
+  }
+
   void _endSession() {
     _state.trackAbandoned();
     _state.reset();
@@ -106,6 +118,7 @@ class _KioskAppState extends State<KioskApp> {
     _idle?.cancel();
     _warn?.cancel();
     _catalog.removeListener(_state.touch);
+    _catalog.removeListener(_onCatalogChange);
     if (widget.catalog == null) _catalog.dispose();
     super.dispose();
   }
@@ -129,8 +142,22 @@ class _KioskAppState extends State<KioskApp> {
         ],
         theme: buildTheme(),
         builder: kioskFrame,
-        home: WelcomeScreen(state: _state),
+        home: _Root(state: _state),
       ),
     );
   }
+}
+
+/// الصفحة الأولى: شاشة التفعيل إن لم يكن الكيوسك مفعّلاً، وإلا شاشة الترحيب.
+class _Root extends StatelessWidget {
+  const _Root({required this.state});
+  final DonationState state;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: state.catalog,
+    builder: (context, _) => state.catalog.needsSetup
+        ? SetupScreen(catalog: state.catalog)
+        : WelcomeScreen(state: state),
+  );
 }
