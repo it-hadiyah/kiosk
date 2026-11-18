@@ -18,7 +18,7 @@ async function api(method, url, body, headers = {}) {
     body: body === undefined ? undefined : Buffer.isBuffer(body) ? body : JSON.stringify(body),
   });
   const text = await res.text(); let json = null; try { json = JSON.parse(text); } catch { /* */ }
-  return { status: res.status, json };
+  return { status: res.status, json, headers: res.headers };
 }
 const as = (role, method, url, body) => api(method, url, body, { Authorization: `Bearer ${tok[role]}` });
 
@@ -163,4 +163,51 @@ test('kiosk sessions: create → activate with code+name → heartbeat → end �
 
 test('session secret persists across restarts (device tokens stay valid)', async () => {
   assert.ok(fs.existsSync(path.join(dataDir, 'secret.key')));
+});
+
+test('per-kiosk visibility: restricted items reach only the chosen device; anonymous sees open items only', async () => {
+  const mk = async (deviceId, name) => {
+    const s = (await as('manager', 'POST', '/api/admin/sessions', { label: name })).json.session;
+    const a = await api('POST', '/api/device/activate', { code: s.code, name, deviceId });
+    assert.equal(a.status, 200); return a.json.token;
+  };
+  const tokA = await mk('devA', 'كيوسك أ'), tokB = await mk('devB', 'كيوسك ب');
+
+  const draft = (await as('manager', 'GET', '/api/admin/catalog')).json.catalog;
+  const cat = draft.catalogs.find((c) => c.items.length >= 1);
+  const inCat = new Set(cat.items.map((i) => i.programId));
+  draft.programs.forEach((p) => { if (inCat.has(p.id)) p.kiosks = ['devA', 'bad id!', 'devA']; });
+  const alone = draft.programs.find((p) => !inCat.has(p.id));
+  alone.kiosks = ['devB'];
+  assert.equal((await as('manager', 'PUT', '/api/admin/catalog', { catalog: draft })).status, 200);
+  assert.equal((await as('manager', 'POST', '/api/admin/publish')).status, 200);
+
+  const get = async (token) => (await api('GET', '/api/catalog', undefined, token ? { 'X-Kiosk-Token': token } : {})).json;
+  const a = await get(tokA), b = await get(tokB), anon = await get(null);
+  const ids = (c) => c.programs.map((p) => p.id);
+  for (const id of inCat) { assert.ok(ids(a).includes(id)); assert.ok(!ids(b).includes(id)); assert.ok(!ids(anon).includes(id)); }
+  assert.ok(ids(b).includes(alone.id) && !ids(a).includes(alone.id) && !ids(anon).includes(alone.id));
+  // الكتالوج الذي فرغ بالتصفية يختفي مع مدخله في الرئيسية
+  assert.ok(a.catalogs.some((c) => c.id === cat.id));
+  assert.ok(!b.catalogs.some((c) => c.id === cat.id) && !b.home.some((h) => h.type === 'catalog' && h.id === cat.id));
+  // لا مراجع معلّقة في الرئيسية ولا الأكثر رواجاً
+  for (const c of [a, b, anon]) {
+    for (const h of c.home) assert.ok(h.type === 'catalog' ? c.catalogs.some((x) => x.id === h.id) : ids(c).includes(h.id));
+    for (const f of c.featured.items) assert.ok(f.type === 'catalog' ? c.catalogs.some((x) => x.id === f.id) : ids(c).includes(f.id));
+    assert.ok(!JSON.stringify(c).includes('"kiosks"'), 'kiosks field is not leaked to kiosks');
+  }
+  // ETag يتبع المحتوى المفلتر
+  const ra = await api('GET', '/api/catalog', undefined, { 'X-Kiosk-Token': tokA });
+  const rb = await api('GET', '/api/catalog', undefined, { 'X-Kiosk-Token': tokB });
+  assert.notEqual(ra.headers.get('etag'), rb.headers.get('etag'));
+  // اللوحة ترى المنشور كاملاً بالحقل، وقائمة الأجهزة للمحرر
+  const live = (await as('editor', 'GET', '/api/admin/live')).json;
+  assert.deepEqual(live.programs.find((p) => inCat.has(p.id)).kiosks, ['devA']);
+  const devs = (await as('editor', 'GET', '/api/admin/devices')).json.devices;
+  assert.ok(devs.some((d) => d.deviceId === 'devA' && d.name === 'كيوسك أ') && devs.some((d) => d.deviceId === 'devB'));
+  assert.equal((await api('GET', '/api/admin/devices')).status, 401);
+  // إرجاع كل شيء للكل
+  draft.programs.forEach((p) => { p.kiosks = []; });
+  await as('manager', 'PUT', '/api/admin/catalog', { catalog: draft }); await as('manager', 'POST', '/api/admin/publish');
+  assert.ok(ids(await get(tokB)).includes([...inCat][0]));
 });

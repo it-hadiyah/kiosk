@@ -308,6 +308,40 @@ const actFail = new Map(); // ip -> {n, until}
 function activationLimited(ip2) { const f = actFail.get(ip2); return f && f.n >= 10 && f.until > Date.now(); }
 function noteActFailure(ip2) { const f = actFail.get(ip2); if (!f || f.until < Date.now()) actFail.set(ip2, { n: 1, until: Date.now() + 60_000 }); else f.n++; }
 
+// ---------- ظهور البرامج حسب الجهاز ----------
+/** نسخة من الكتالوج مناسبة لجهاز معيّن: العناصر المحدّدة لأجهزة أخرى تُحذف مع كل مراجعها.
+ *  بلا جهاز معروف (deviceId فارغ) يرى العناصر المفتوحة للكل فقط. */
+function filterForDevice(cat, deviceId) {
+  const ok = (o) => !o.kiosks || !o.kiosks.length || (deviceId && o.kiosks.includes(deviceId));
+  const strip = (o) => { const rest = { ...o }; delete rest.kiosks; return rest; };
+  const programs = (cat.programs || []).filter(ok);
+  const progIds = new Set(programs.map((p) => p.id));
+  const catalogs = [];
+  for (const c of (cat.catalogs || []).filter(ok)) {
+    const items = (c.items || []).filter((i) => progIds.has(i.programId));
+    if ((c.items || []).length && !items.length) continue; // كتالوج صار فارغاً بسبب التصفية
+    catalogs.push({ ...strip(c), items });
+  }
+  const catIds = new Set(catalogs.map((c) => c.id));
+  const has = (t, id) => (t === 'catalog' ? catIds : progIds).has(id);
+  const home = (cat.home || []).filter((h) => has(h.type, h.id));
+  const featured = cat.featured ? { ...cat.featured, items: (cat.featured.items || []).filter((x) => has(x.type, x.id)) } : cat.featured;
+  return { ...cat, programs: programs.map(strip), catalogs, home, featured };
+}
+const anyRestricted = (cat) => [...(cat.programs || []), ...(cat.catalogs || [])].some((o) => o.kiosks && o.kiosks.length);
+/** الأجهزة المعروفة (آخر جلسة لكل deviceId) لاختيارها عند تحديد ظهور برنامج. */
+function knownDevices() {
+  const by = new Map();
+  for (const s of sessions()) {
+    if (!s.deviceId) continue;
+    const prev = by.get(s.deviceId);
+    const stamp = s.activatedAt || s.createdAt;
+    if (!prev || stamp > prev.stamp) by.set(s.deviceId, { deviceId: s.deviceId, name: s.kioskName, label: s.label, status: s.status, lastSeen: s.lastSeen, stamp });
+    else if (s.status === 'active' && prev.status !== 'active') prev.status = 'active';
+  }
+  return [...by.values()].map((d) => { const o = { ...d }; delete o.stamp; return o; }).sort((a, b) => String(a.name).localeCompare(String(b.name), 'ar'));
+}
+
 // ---------- المسارات ----------
 function auth(req) {
   const h = req.headers.authorization || '';
@@ -355,7 +389,11 @@ async function handle(req, res) {
     if (dev && dev.ended) return send(res, 401, { error: 'انتهت جلسة هذا الكيوسك', code: 'session_ended' }, { 'Access-Control-Allow-Origin': '*' });
     if (dev && dev.session) touchSession(dev.session, req.headers['x-kiosk-version']);
     if (req.headers['x-kiosk-device']) touchDevice(req.headers['x-kiosk-device'], req.headers['x-kiosk-version'], '');
-    const body = fs.readFileSync(LIVE);
+    let body = fs.readFileSync(LIVE);
+    {
+      const full = JSON.parse(body.toString('utf8'));
+      if (anyRestricted(full)) body = Buffer.from(JSON.stringify(filterForDevice(full, dev && dev.session ? dev.session.deviceId : ''), null, 2));
+    }
     const etag = '"' + crypto.createHash('sha1').update(body).digest('hex') + '"';
     const cors = { 'Access-Control-Allow-Origin': '*', ETag: etag, 'Cache-Control': 'no-cache', 'Content-Type': 'application/json; charset=utf-8' };
     if (req.headers['if-none-match'] === etag) { res.writeHead(304, cors); return res.end(); }
@@ -472,6 +510,8 @@ async function handle(req, res) {
       fs.unlinkSync(f); audit(who, 'media_delete', `حذف صورة ${name}`, { ip: ip(req) });
       return send(res, 200, { ok: true });
     }
+    if (p === '/api/admin/live' && m === 'GET') return send(res, 200, readJson(LIVE)); // المنشور كاملاً (للوحة)
+    if (p === '/api/admin/devices' && m === 'GET') return send(res, 200, { devices: knownDevices() });
     if (p === '/api/admin/sessions' && m === 'GET') {
       if (!can(who, 'devices')) return forbid(res);
       return send(res, 200, { sessions: sessions() });
@@ -554,4 +594,4 @@ if (require.main === module) {
     if (generatedPassword) console.log(`ADMIN_PASSWORD غير مضبوط — كلمة مرور مؤقتة لهذه الجلسة: ${ADMIN_PASSWORD}`);
   });
 }
-module.exports = { createServer, ADMIN_PASSWORD: () => ADMIN_PASSWORD, diffSummary };
+module.exports = { createServer, ADMIN_PASSWORD: () => ADMIN_PASSWORD, diffSummary, filterForDevice };

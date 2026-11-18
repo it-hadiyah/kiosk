@@ -27,6 +27,11 @@ function image(v) {
   return '';
 }
 
+/** معرّفات الأجهزة المسموح لها برؤية العنصر (فارغة = كل الأجهزة). */
+function kioskIds(v) {
+  const arr = Array.isArray(v) ? v : [];
+  return [...new Set(arr.filter((x) => typeof x === 'string' && /^[A-Za-z0-9_-]{1,24}$/.test(x)))].slice(0, 50);
+}
 const HEX = /^#[0-9a-fA-F]{6}$/;
 function lum(hex) {
   const ch = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
@@ -93,6 +98,7 @@ function normalize(input) {
       maxAmount: kind === 'free' ? settings.maxAmount : int(p.maxAmount, 1, 9999999, settings.maxAmount),
       allowQuantity: kind === 'fixed' && p.allowQuantity === true,
       maxQuantity: int(p.maxQuantity, 1, 999, 99),
+      kiosks: kioskIds(p.kiosks),
       popupImage: image(p.popupImage),
       popupTitle: loc(p.popupTitle),
       popupHint: loc(p.popupHint),
@@ -128,7 +134,7 @@ function normalize(input) {
     if (active && !items.length) warnings.push(`الكتالوج ${title.ar || id}: فارغ`);
     catalogs.push({
       id, active, title, subtitle: loc(c.subtitle), image: image(c.image),
-      imageAlign: ALIGNS.includes(c.imageAlign) ? c.imageAlign : 'center', items,
+      imageAlign: ALIGNS.includes(c.imageAlign) ? c.imageAlign : 'center', items, kiosks: kioskIds(c.kiosks),
     });
   }
   const catIds = new Set(catalogs.map((c) => c.id));
