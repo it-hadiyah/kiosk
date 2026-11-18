@@ -111,7 +111,8 @@ const serverBackend = {
     const d = await this._req('/api/admin/upload?name=' + encodeURIComponent(file.name || 'image'), { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
     return d.url;
   },
-  async fetchLive() { return this._req('/api/catalog', { auth: false, cache: 'no-store' }); },
+  async fetchLive() { return this._req('/api/admin/live', { cache: 'no-store' }); },
+  async devices() { return (await this._req('/api/admin/devices')).devices; },
   resolveImage(url) {
     if (!url) return PLACEHOLDER;
     if (/^asset:/.test(url)) return ASSET_PLACEHOLDER;   // لا معاينة ويب لصور التطبيق المضمّنة
@@ -159,7 +160,8 @@ function normClient(c) {
   const S0 = c.settings || (c.settings = {}); S0.theme = Object.assign({ primary: '#00A092', ink: '#1F4A47', radius: 'normal' }, S0.theme);
   const f = (c.featured && typeof c.featured === 'object') ? c.featured : {};
   c.featured = { enabled: f.enabled === true, intervalSeconds: f.intervalSeconds === '' ? '' : (isNum(f.intervalSeconds) ? f.intervalSeconds : 5), title: Object.assign(blankLoc(), f.title), items: Array.isArray(f.items) ? f.items : [] };
-  (c.programs || []).forEach((p) => { p.popupTitle = Object.assign(blankLoc(), p.popupTitle); p.popupHint = Object.assign(blankLoc(), p.popupHint); if (p.kind === 'open' && p.freeEntry) p.kind = 'free'; delete p.freeEntry; });
+  (c.programs || []).forEach((p) => { p.kiosks = Array.isArray(p.kiosks) ? p.kiosks : []; p.popupTitle = Object.assign(blankLoc(), p.popupTitle); p.popupHint = Object.assign(blankLoc(), p.popupHint); if (p.kind === 'open' && p.freeEntry) p.kind = 'free'; delete p.freeEntry; });
+  (c.catalogs || []).forEach((k) => { k.kiosks = Array.isArray(k.kiosks) ? k.kiosks : []; });
   return c;
 }
 const featIndex = (type, id) => C().featured.items.findIndex((x) => x.type === type && x.id === id);
@@ -705,7 +707,7 @@ function diffCatalogs(a, b) {
   const G = [];
   /* البرامج */
   const pg = { title: 'البرامج', items: [] }; G.push(pg);
-  const FL = { active: 'التفعيل', title: 'العناوين', image: 'الصورة', imageAlign: 'محاذاة الصورة', kind: 'النوع', price: 'القيمة', presets: 'المبالغ المحددة', minAmount: 'الحد الأدنى', maxAmount: 'الحد الأعلى', allowQuantity: 'خيار الكمية', popupImage: 'صورة النافذة', popupTitle: 'عبارة النافذة', popupHint: 'نص حقل المبلغ', maxQuantity: 'أقصى كمية' };
+  const FL = { active: 'التفعيل', title: 'العناوين', image: 'الصورة', imageAlign: 'محاذاة الصورة', kind: 'النوع', price: 'القيمة', presets: 'المبالغ المحددة', minAmount: 'الحد الأدنى', maxAmount: 'الحد الأعلى', allowQuantity: 'خيار الكمية', popupImage: 'صورة النافذة', kiosks: 'الأجهزة', popupTitle: 'عبارة النافذة', popupHint: 'نص حقل المبلغ', maxQuantity: 'أقصى كمية' };
   const am = new Map(a.programs.map((p) => [p.id, p]));
   b.programs.forEach((p) => {
     const o = am.get(p.id); if (!o) return pg.items.push({ k: 'add', t: `إضافة برنامج ${nm(p)}` });
@@ -715,7 +717,7 @@ function diffCatalogs(a, b) {
   const bm = new Set(b.programs.map((p) => p.id)); a.programs.forEach((p) => { if (!bm.has(p.id)) pg.items.push({ k: 'del', t: `حذف برنامج ${nm(p)}` }); });
   /* الكتالوجات */
   const cg = { title: 'الكتالوجات', items: [] }; G.push(cg);
-  const CF = { active: 'التفعيل', title: 'العناوين', subtitle: 'العناوين الفرعية', image: 'الصورة', imageAlign: 'محاذاة الصورة' };
+  const CF = { kiosks: 'الأجهزة', active: 'التفعيل', title: 'العناوين', subtitle: 'العناوين الفرعية', image: 'الصورة', imageAlign: 'محاذاة الصورة' };
   const ac = new Map(a.catalogs.map((c) => [c.id, c]));
   b.catalogs.forEach((c) => {
     const o = ac.get(c.id); if (!o) return cg.items.push({ k: 'add', t: `إضافة كتالوج ${nm(c)} (${c.items.length} برامج)` });
@@ -759,9 +761,9 @@ function diffCatalogs(a, b) {
    10) المحرّرات (Drawer)
    ===================================================================== */
 function newProgram() {
-  return { id: '', active: true, title: blankLoc(), image: '', imageAlign: 'center', kind: 'open', price: 0, presets: [], minAmount: 1, maxAmount: C().settings.maxAmount, allowQuantity: false, maxQuantity: 99, popupImage: '', popupTitle: blankLoc(), popupHint: blankLoc() };
+  return { id: '', active: true, title: blankLoc(), image: '', imageAlign: 'center', kind: 'open', price: 0, presets: [], minAmount: 1, maxAmount: C().settings.maxAmount, allowQuantity: false, maxQuantity: 99, kiosks: [], popupImage: '', popupTitle: blankLoc(), popupHint: blankLoc() };
 }
-function newCatalog() { return { id: '', active: true, title: blankLoc(), subtitle: blankLoc(), image: '', imageAlign: 'center', items: [] }; }
+function newCatalog() { return { id: '', active: true, title: blankLoc(), subtitle: blankLoc(), image: '', imageAlign: 'center', items: [], kiosks: [] }; }
 
 /* وضع الظهور (placements): مفاتيح 'home' و catId */
 function plGet(key) {

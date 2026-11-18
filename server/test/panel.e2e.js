@@ -461,6 +461,39 @@ async function main() {
     await page.waitForFunction(() => !document.querySelector('.scard.ended'));
     ok(true, 'ended session record deleted');
 
+    /* ---------- ظهور البرنامج حسب الجهاز ---------- */
+    console.log('== per-kiosk visibility');
+    const adminTk = await page.evaluate(() => backend._tk());
+    const adm = (method, url, body) => fetch(BASE + url, { method, headers: { Authorization: 'Bearer ' + adminTk, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined }).then((r) => r.json());
+    const kioskTok = async (deviceId, name) => { const s = (await adm('POST', '/api/admin/sessions', { label: name })).session; const r = await fetch(BASE + '/api/device/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: s.code, name, deviceId }) }); return (await r.json()).token; };
+    const tA = await kioskTok('e2eA', 'كيوسك أ'), tB = await kioskTok('e2eB', 'كيوسك ب');
+    await page.reload(); await page.waitForSelector('#app:not([hidden])');
+    await tab('programs');
+    await page.click('.pcard [data-act=edit-prog] >> nth=0');
+    await page.waitForSelector('#drawer.open [data-region=kiosksCard] .seg');
+    const pid = await page.evaluate(() => ui.edit.id);
+    await page.click('[data-act=kiosk-mode][data-v=some]');
+    ok((await page.textContent('[data-region=kiosksCard]')).includes('كيوسك أ') && (await page.textContent('[data-region=kiosksCard]')).includes('كيوسك ب'), 'kiosk picker lists activated devices by name');
+    ok((await page.textContent('[data-region=kiosksCard]')).includes('اختر جهازاً واحداً'), 'warns when "specific devices" has no device selected');
+    await page.check('[data-kiosk=e2eA]');
+    await saved();
+    await page.locator('[data-region=kiosksCard]').screenshot({ path: path.join(SHOTS, '12-kiosks-card.png') });
+    eq(await page.evaluate((id) => findProg(id).kiosks, pid), ['e2eA'], 'program restricted to device A in the draft');
+    await page.click('#drawer [data-act=close-editor]'); await page.waitForFunction(() => !ui.edit);
+    ok((await page.textContent('.pcard[data-id="' + pid + '"] .chips')).includes('1 أجهزة'), 'program card shows the device-restriction chip');
+    await page.click('[data-act=publish-top]'); await page.waitForSelector('[data-act=publish]'); await page.click('[data-act=publish]'); await confirmYes();
+    await page.waitForFunction(() => state.hasUnpublished === false && !ui.pubBusy);
+    const idsFor = async (t) => (await (await fetch(BASE + '/api/catalog', { headers: t ? { 'X-Kiosk-Token': t } : {} })).json()).programs.map((p) => p.id);
+    ok((await idsFor(tA)).includes(pid), 'device A sees the restricted program');
+    ok(!(await idsFor(tB)).includes(pid), 'device B does not see it');
+    ok(!(await idsFor(null)).includes(pid), 'anonymous client does not see it');
+    // رجوع «كل الأجهزة»
+    await tab('programs');
+    await page.click(`.pcard[data-id="${pid}"] [data-act=edit-prog]`); await page.waitForSelector('#drawer.open [data-region=kiosksCard] .seg');
+    await page.click('[data-act=kiosk-mode][data-v=all]'); await saved();
+    eq(await page.evaluate((id) => findProg(id).kiosks, pid), [], 'back to all devices');
+    await page.click('#drawer [data-act=close-editor]'); await page.waitForFunction(() => !ui.edit);
+
     ok(jsErrors.length === 0, 'no JS console/page errors' + (jsErrors.length ? ': ' + jsErrors.join(' | ') : ''));
   } catch (e) {
     fail++; console.log('  ✗ EXCEPTION:', e.stack || e);

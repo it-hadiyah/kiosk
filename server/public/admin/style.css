@@ -456,3 +456,5 @@ body:not(.can-publish) #btnPublish, body:not(.can-publish) [data-act="publish"],
 .dlg.ask h3 { margin-bottom: 12px; }
 .bigcode { font-size: 38px; font-weight: 700; letter-spacing: 4px; text-align: center; color: var(--brand-strong); background: var(--brand-soft); border-radius: 14px; padding: 14px 8px; margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
 .sgrid { margin-top: 16px; } .steps { margin-bottom: 0; }
+
+.kl { margin-top: 10px; } .kl .row { justify-content: space-between; }

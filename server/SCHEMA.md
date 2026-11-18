@@ -57,3 +57,6 @@
 `{ type, programId?, amount?, durationMs?, lang?, deviceId, appVersion }` حيث `type` ∈
 `session_start | program_selected | amount_chosen | payment_started | payment_completed | session_abandoned | heartbeat`.
 بلا بيانات شخصية. ويُسجَّل الجهاز أيضاً من ترويستي `X-Kiosk-Device` و`X-Kiosk-Version` عند جلب الكتالوج.
+
+## ظهور حسب الجهاز `kiosks`
+في كل `Program` و`Catalog`: `kiosks: string[]` (معرّفات أجهزة `[A-Za-z0-9_-]{1,24}`، حتى 50). **فارغة = كل الأجهزة.** يفلتر `GET /api/catalog` النتيجة حسب جهاز رمز الجلسة (`X-Kiosk-Token`)، ويحذف الحقل من الاستجابة. اللوحة تقرأ النسخة المنشورة كاملة من `GET /api/admin/live`، وتقرأ الأجهزة المعروفة من `GET /api/admin/devices`.

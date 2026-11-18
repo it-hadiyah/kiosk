@@ -35,6 +35,7 @@ const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) + '%' : '—');
 
 /* ---------- الأدوار ---------- */
 async function onBoot() {
+  if (backend.devices) { try { ui.devs = await backend.devices(); } catch (e) { ui.devs = []; } }
   if (backend.me) { try { const m = await backend.me(); ui.role = m.role; ui.can = new Set(m.can || []); } catch (e) { /* يبقى الافتراضي */ } }
   if (!can('devices')) { const i = TABS.findIndex((t) => t.k === 'devices'); if (i >= 0) TABS.splice(i, 1); }
   ALL_PERMS.forEach((p) => document.body.classList.toggle('can-' + p, can(p)));
@@ -79,6 +80,7 @@ function qualityIssues() {
       const filled = LANGS.filter((l) => String((o.popupTitle || {})[l.k] || '').trim());
       if (filled.length && filled.length < LANGS.length) out.push({ k: 'tr', text: `«${tt(o)}»: عبارة النافذة غير مكتملة الترجمة`, act, id: o.id });
     }
+    if (backend.devices && ui.devs && (o.kiosks || []).some((id) => !ui.devs.some((d) => d.deviceId === id))) out.push({ k: 'place', text: `${label} «${tt(o)}» محدد لجهاز غير معروف (لن يراه أي كيوسك)`, act, id: o.id });
     if (!placed(kind, o.id)) out.push({ k: 'place', text: `${label} «${tt(o)}» مفعّل لكنه غير موضوع في أي مكان (لن يراه المتبرع)`, act, id: o.id });
     if (kind === 'catalog' && !o.items.some((i) => { const p = findProg(i.programId); return p && p.active; })) out.push({ k: 'empty', text: `كتالوج «${tt(o)}» بلا برامج مفعّلة`, act, id: o.id });
   });
@@ -336,6 +338,7 @@ regions.devList = () => {
 async function loadSessions(force) {
   if (!feat('devices') || !can('devices')) return;
   try { ui.sessions = await backend.sessions(); ui.sessErr = ''; } catch (e) { if (!ui.sessions) ui.sessErr = e.message || 'تعذّر تحميل الجلسات'; }
+  if (backend.devices) { try { ui.devs = await backend.devices(); } catch (e) { /* يبقى */ } }
   ui.forceRegions = !!force; refreshRegions(); ui.forceRegions = false;
 }
 function askFields(title, fields, okLabel = 'حفظ') {
@@ -382,4 +385,42 @@ Object.assign(actions, {
     try { await backend.deleteSession(el.dataset.id); toast('تم الحذف'); await loadSessions(true); } catch (e) { toast(e.message || 'تعذّر الحذف', 'warn'); }
   },
   async 'sess-copy'(el) { try { await navigator.clipboard.writeText(el.dataset.code); toast('تم نسخ المعرف ✓'); } catch (e) { toast(el.dataset.code, 'warn'); } },
+});
+
+/* ---------- ظهور البرنامج/الكتالوج حسب الجهاز ---------- */
+const _placementsHtml = placementsHtml;
+placementsHtml = () => _placementsHtml() + '<div data-region="kiosksCard"></div>';
+const _placementChips = placementChips;
+placementChips = (p) => _placementChips(p) + (p.kiosks && p.kiosks.length ? `<span class="chip soft">${ic('monitor')}${nf(p.kiosks.length)} أجهزة</span>` : '');
+const DEV_STATUS = { active: 'نشط', ended: 'جلسته منتهية', pending: 'بانتظار التفعيل' };
+regions.kiosksCard = () => {
+  if (!backend.devices || !ui.edit) return '';
+  const o = editing(); if (!o) return '';
+  const ids = o.kiosks || []; const devs = ui.devs || [];
+  const some = ids.length > 0 || ui.kSome === (ui.edit.id || '__new');
+  const unknown = ids.filter((id) => !devs.some((d) => d.deviceId === id));
+  const what = ui.edit.type === 'prog' ? 'البرنامج' : 'الكتالوج';
+  return `<section class="card"><h3>الأجهزة التي يظهر عليها</h3>
+    <p class="hint">اختر هل يظهر ${what} على <b>كل الكيوسكات</b> أو على أجهزة محددة فقط. الجهاز يُعرف بالتفعيل، ويبقى اختيارك صالحاً حتى لو فتحت له جلسة جديدة بعد نقله.</p>
+    <div class="seg" role="group" aria-label="أجهزة الظهور"><button type="button" data-act="kiosk-mode" data-v="all" aria-pressed="${!some}">كل الأجهزة</button><button type="button" data-act="kiosk-mode" data-v="some" aria-pressed="${some}">أجهزة محددة</button></div>
+    ${some ? `${devs.length || unknown.length ? `<ul class="rows plain kl">${devs.map((d) => `<li class="row"><label class="check"><input type="checkbox" data-kiosk="${esc(d.deviceId)}" ${ids.includes(d.deviceId) ? 'checked' : ''}><span><b>${esc(d.name || d.deviceId)}</b>${d.label ? ' <small class="muted">— ' + esc(d.label) + '</small>' : ''}</span></label><small class="muted">${esc(DEV_STATUS[d.status] || '')}</small></li>`).join('')}
+      ${unknown.map((id) => `<li class="row"><label class="check"><input type="checkbox" data-kiosk="${esc(id)}" checked><span><b dir="ltr">${esc(id)}</b> <small class="muted">— جهاز غير معروف</small></span></label></li>`).join('')}</ul>` : '<p class="hint">لا توجد أجهزة مفعّلة بعد. فعّل كيوسكاً من تبويب «الأجهزة» أولاً.</p>'}
+      ${ids.length ? `<p class="hint">يظهر على ${nf(ids.length)} ${ids.length === 1 ? 'جهاز' : 'أجهزة'} فقط، ولا يراه غيرها (ولا الأجهزة غير المفعّلة).</p>` : '<p class="warnbox slim"><strong>اختر جهازاً واحداً على الأقل، وإلا سيظهر على كل الأجهزة.</strong></p>'}` : `<p class="hint">يظهر ${what} على كل الكيوسكات.</p>`}</section>`;
+};
+function rerenderKiosks() { ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; }
+Object.assign(actions, {
+  'kiosk-mode'(el) {
+    const o = editing(); if (!o) return;
+    if (el.dataset.v === 'all') { if (o.kiosks && o.kiosks.length) { o.kiosks = []; if (!ui.edit.creating) markDirty(); } ui.kSome = null; }
+    else ui.kSome = ui.edit.id || '__new';
+    rerenderKiosks();
+  },
+});
+document.addEventListener('change', (ev) => {
+  const el = ev.target; if (!el.matches || !el.matches('[data-kiosk]')) return;
+  const o = editing(); if (!o) return;
+  const set = new Set(o.kiosks || []); if (el.checked) set.add(el.dataset.kiosk); else set.delete(el.dataset.kiosk);
+  o.kiosks = [...set];
+  if (!ui.edit.creating) markDirty();
+  rerenderKiosks();
 });
