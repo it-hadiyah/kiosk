@@ -350,7 +350,7 @@ function confirmDlg(msg, okLabel = 'موافق', danger = false) {
 
 /* ---------- صور مصغّرة وأدوات صغيرة ---------- */
 const POS = { center: '50% 50%', top: '50% 0%', bottom: '50% 100%' };
-const imgTag = (url, align, cls = '') => `<img class="${cls}" src="${esc(imgSrc(url))}" alt="" loading="lazy" style="object-position:${POS[align] || POS.center}">`;
+const imgTag = (url, align, cls = '') => `<img class="${cls}" src="${esc(imgSrc(url))}" alt="" loading="lazy" decoding="async" style="object-position:${POS[align] || POS.center}">`;
 const badge = (txt, cls = '') => `<span class="badge ${cls}">${esc(txt)}</span>`;
 function slug(s) { return String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, ''); }
 const rnd = (pre) => pre + '-' + Math.random().toString(36).slice(2, 6).padEnd(4, '0');
@@ -523,12 +523,12 @@ async function downscale(file) {
   let bmp;
   try { bmp = await createImageBitmap(file); } catch (e) { return file; }
   const max = Math.max(bmp.width, bmp.height);
-  if (max <= 1600 && file.size <= MAX_UPLOAD) { bmp.close && bmp.close(); return file; }
+  if (max <= 1600 && file.size <= 1.5 * 1024 * 1024) { bmp.close && bmp.close(); return file; }   // صغيرة بما يكفي: تُرفع كما هي
   const k = Math.min(1, 1600 / max);
   const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
   const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(bmp, 0, 0, cv.width, cv.height);
   bmp.close && bmp.close();
-  const blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', 0.9));
+  const blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', 0.86));
   if (!blob) return file;
   return new File([blob], (file.name || 'image').replace(/\.[^.]*$/, '') + '.jpg', { type: 'image/jpeg' });
 }

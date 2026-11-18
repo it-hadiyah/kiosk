@@ -17,7 +17,6 @@ ICONS.shield = 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z';
 ICONS.monitor = 'M3 4h18v12H3zM8 20h8M12 16v4';
 
 TABS.push({ k: 'overview', label: 'نظرة عامة', icon: 'chart' });
-TABS.splice(TABS.findIndex((t) => t.k === 'settings'), 0, { k: 'media', label: 'الوسائط', icon: 'image' });
 if (feat('devices')) TABS.splice(TABS.findIndex((t) => t.k === 'settings'), 0, { k: 'devices', label: 'الأجهزة', icon: 'monitor' });
 VIEWS.devices = () => viewDevices();
 VIEWS.media = () => viewMedia();
@@ -53,7 +52,7 @@ async function onBoot() {
     new MutationObserver(() => lockUi()).observe($('#main'), { childList: true, subtree: true });
   }
 }
-const KEEP = '.navb,[data-act="close-editor"],[data-act="tab"],[data-act="edit-prog"],[data-act="edit-cat"],[data-act="pv-lang"],[data-act="pv-dev"],[data-act="feat-step"],[data-act="feat-go"],[data-q],[data-mq],[data-act="export"],[data-act="ov-open"],[data-act="media-copy"],[data-act="ov-refresh"],[data-act="pv-src"],[data-act="pf-status"],[data-act="cf-status"],[data-act="alert-open"],[data-act="alerts-all"],[data-act="open-device"],[data-act="media-filter"],[data-act="audit-refresh"],[data-act="dismiss-err"]';
+const KEEP = '.navb,[data-act="close-editor"],[data-act="tab"],[data-act="edit-prog"],[data-act="edit-cat"],[data-act="pv-lang"],[data-act="pv-dev"],[data-act="feat-step"],[data-act="feat-go"],[data-q],[data-mq],[data-act="media-open"],[data-act="media-view"],[data-act="media-sort-dir"],[data-media-sort],[data-media-type],[data-act="export"],[data-act="ov-open"],[data-act="media-copy"],[data-act="ov-refresh"],[data-act="pv-src"],[data-act="pf-status"],[data-act="cf-status"],[data-act="alert-open"],[data-act="alerts-all"],[data-act="open-device"],[data-act="media-filter"],[data-act="audit-refresh"],[data-act="dismiss-err"]';
 function lockUi() {
   if (!can('edit')) {
     $$('#view input,#view select,#view textarea,#view button,#drawerBody input,#drawerBody select,#drawerBody textarea,#drawerBody button,#drawerFoot button').forEach((el) => { if (!el.matches(KEEP) && !el.disabled) el.disabled = true; });
@@ -98,37 +97,7 @@ function translationRows() {
   return rows;
 }
 
-/* ---------- مكتبة الوسائط ---------- */
-function usageOf(m) {
-  const u = new Set(m.usedBy || []); const c = C();
-  c.programs.forEach((p) => { if (p.image === m.url) u.add(`برنامج «${tt(p)}»`); if (p.popupImage === m.url) u.add(`نافذة «${tt(p)}»`); });
-  c.catalogs.forEach((k) => { if (k.image === m.url) u.add(`كتالوج «${tt(k)}»`); });
-  if (c.settings.welcomeBackground === m.url) u.add('خلفية الترحيب');
-  return [...u];
-}
-function viewMedia() {
-  return `<div class="page-h"><div><h2>الوسائط</h2><p class="muted">كل الصور المرفوعة: تصفّح، أعد الاستخدام، وتعرّف أين تُستخدم كل صورة. لا يمكن حذف صورة مستخدمة.</p></div>
-    ${can('upload') ? `<button class="btn primary" type="button" data-act="media-upload">${ic('upload')}رفع صورة</button><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>` : ''}</div>
-  <div class="toolbar row-tools"><div class="search">${ic('search')}<label class="sr" for="mq">بحث في الوسائط</label><input id="mq" type="search" data-mq="1" placeholder="ابحث باسم الملف…" value="${esc(ui.mq || '')}"></div>
-    <div class="seg" role="group" aria-label="تصفية">${[['all', 'الكل'], ['used', 'مستخدمة'], ['free', 'غير مستخدمة']].map(([k, n]) => `<button type="button" data-act="media-filter" data-v="${k}" aria-pressed="${(ui.mf || 'all') === k}">${n}</button>`).join('')}</div></div>
-  <div data-region="mediaGrid"></div>`;
-}
-regions.mediaGrid = () => {
-  if (!ui.media) return `<p class="muted">${ui.mediaErr ? esc(ui.mediaErr) : 'جارٍ التحميل…'}</p>`;
-  const q = (ui.mq || '').trim().toLowerCase(); const f = ui.mf || 'all';
-  const list = ui.media.map((m) => ({ ...m, use: usageOf(m) })).filter((m) => (!q || m.name.toLowerCase().includes(q)) && (f === 'all' || (f === 'used') === (m.use.length > 0)));
-  if (!list.length) return '<div class="empty"><strong>لا توجد صور مطابقة</strong></div>';
-  return `<div class="mgrid">${list.map((m) => `<article class="mcard"><div class="mimg"><img src="${esc(imgSrc(m.url))}" alt="" loading="lazy"></div>
-    <div class="mbody"><strong dir="ltr" class="mname" title="${esc(m.name)}">${esc(m.name)}</strong><span class="muted small">${KB(m.size || 0)}${m.at ? ' · ' + esc(ago(m.at)) : ''}</span>
-    ${m.use.length ? `<span class="badge kind" title="${esc(m.use.join('\n'))}">مستخدمة (${nf(m.use.length)})</span>` : '<span class="badge off">غير مستخدمة</span>'}
-    <div class="btnrow tight"><button class="btn small" type="button" data-act="media-copy" data-url="${esc(m.url)}">نسخ الرابط</button>
-    ${feat('deleteMedia') && can('media_delete') ? `<button class="btn small danger-o" type="button" data-act="media-del" data-name="${esc(m.name)}" ${m.use.length ? 'disabled title="مستخدمة — أزلها أولاً"' : ''}>${ic('trash')}</button>` : ''}</div></div></article>`).join('')}</div>`;
-};
-async function loadMedia() {
-  try { ui.media = await backend.media(); ui.mediaErr = ''; } catch (e) { ui.media = null; ui.mediaErr = e.message || 'تعذّر تحميل الوسائط'; }
-  ui.forceRegions = true; refreshRegions(); ui.forceRegions = false;
-}
-
+/* ---------- مكتبة الوسائط: انظر media.js ---------- */
 /* نافذة «اختيار من المكتبة» داخل منتقي الصور */
 async function openLibrary(pk) {
   let dlg = $('#libDlg'); if (!dlg) { document.body.insertAdjacentHTML('beforeend', '<dialog id="libDlg" class="dlg lib"></dialog>'); dlg = $('#libDlg'); }
@@ -142,6 +111,7 @@ async function openLibrary(pk) {
     const b = ev.target.closest('[data-lib-pick]'); if (b) { applyImage(pk, b.dataset.libPick); dlg.close(); toast('تم اختيار الصورة ✓'); }
   };
 }
+
 
 /* ---------- سجل التدقيق ---------- */
 const AUDIT_LABEL = { login: 'دخول', login_failed: 'دخول فاشل', draft_save: 'تعديل مسودة', publish: 'نشر', restore: 'استرجاع', upload: 'رفع صورة', media_delete: 'حذف صورة', stats_reset: 'تصفير الإحصائيات', session_create: 'فتح جلسة', device_activate: 'تفعيل كيوسك', session_end: 'إنهاء جلسة', device_end: 'إنهاء من الكيوسك', session_rename: 'تعديل كيوسك', session_delete: 'حذف جلسة' };
@@ -164,7 +134,6 @@ function onTab(k) {
   clearInterval(ui.sessTimer);
   if (k === 'overview') loadOverviewData();
   if (k === 'dashboard') { loadDashboard(); ui.sessTimer = setInterval(() => { if (ui.tab === 'dashboard') loadDashboard(true); else clearInterval(ui.sessTimer); }, 30000); }
-  if (k === 'media') loadMedia();
   if (k === 'devices') { loadSessions(); ui.sessTimer = setInterval(() => { if (ui.tab === 'devices') loadSessions(); else clearInterval(ui.sessTimer); }, 30000); }
 }
 Object.assign(actions, {
@@ -172,34 +141,11 @@ Object.assign(actions, {
   'ov-refresh'() { loadOverviewData(); },
   'audit-refresh'() { loadAudit(); },
   'img-library'(el) { openLibrary(el.closest('.imgp').dataset.pk); },
-  'media-upload'() { $('#mediaFile').click(); },
-  'media-filter'(el) { ui.mf = el.dataset.v; $$('[data-act="media-filter"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === ui.mf))); refreshRegions(); },
-  async 'media-copy'(el) {
-    const abs = new URL(el.dataset.url, location.href).href;
-    try { await navigator.clipboard.writeText(abs); toast('تم نسخ الرابط ✓'); } catch (e) { toast(abs, 'warn'); }
-  },
-  async 'media-del'(el) {
-    if (!(await confirmDlg(`حذف الصورة ${el.dataset.name} نهائياً؟`, 'حذف', true))) return;
-    try { await backend.deleteMedia(el.dataset.name); toast('تم حذف الصورة'); loadMedia(); }
-    catch (e) { toast(e.message || 'تعذّر الحذف', 'warn'); }
-  },
   async 'stats-reset'() {
     if (!(await confirmDlg('تصفير كل إحصائيات المحاكاة؟ لا يمكن التراجع.', 'تصفير', true))) return;
     try { await backend.resetStats(); toast('تم التصفير'); loadOverviewData(); } catch (e) { toast(e.message || 'تعذّر التصفير', 'warn'); }
   },
 });
-document.addEventListener('input', (ev) => {
-  const el = ev.target; if (!el.matches || !el.matches('[data-mq]')) return;
-  ui.mq = el.value; const r = $('[data-region="mediaGrid"]'); if (r) r.innerHTML = regions.mediaGrid();
-});
-document.addEventListener('change', async (ev) => {
-  const el = ev.target; if (!el.matches || !el.matches('#mediaFile')) return;
-  const f = el.files[0]; el.value = ''; if (!f) return;
-  if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return toast('الملف غير مدعوم — اختر jpg أو png أو webp', 'warn');
-  try { const url = await backend.upload(await downscale(f)); toast('تم رفع الصورة ✓'); await loadMedia(); announce('تم رفع ' + url); }
-  catch (e) { if (e.status === 401) showLogin('انتهت الجلسة، أعد تسجيل الدخول.'); else toast(e.message || 'تعذّر الرفع', 'warn'); }
-});
-
 /* المحرر المباشر: اضغط أي بطاقة في المعاينة لفتح محررها */
 document.addEventListener('click', (ev) => {
   const t = ev.target.closest('.phone [data-tile]'); if (!t || ev.target.closest('[data-act]') || ui.edit) return;

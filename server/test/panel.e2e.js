@@ -401,9 +401,42 @@ async function main() {
     const nMedia = await page.$$eval('.mcard', (a) => a.length);
     ok(nMedia >= 8, `media library lists uploads (${nMedia})`);
     ok((await page.$$('.mcard .badge.kind')).length >= 1, 'media shows usage badges');
-    ok(await page.$$eval('.mcard .badge.kind', (a) => a.length) > 0 && (await page.$$('[data-act=media-del][disabled]')).length > 0, 'used images cannot be deleted');
-    const delBtn = await page.$('[data-act=media-del]:not([disabled])');
-    if (delBtn) { const before = nMedia; await delBtn.click(); await confirmYes(); await page.waitForFunction((n) => document.querySelectorAll('.mcard').length < n, before, { timeout: 8000 }); ok(true, 'unused image deleted from library'); }
+    ok(/\d+×\d+/.test(await page.textContent('.mcard')), 'media cards show image dimensions');
+    ok(await page.$$eval('.mcard img', (a) => a.every((i) => i.loading === 'lazy' && i.decoding === 'async')), 'thumbnails load lazily and decode async');
+    // تفاصيل صورة مستخدمة: لا يمكن حذفها
+    await page.click('.mcard:has(.badge.kind) .mimg >> nth=0');
+    await page.waitForSelector('#mediaDlg[open]');
+    ok((await page.textContent('#mediaDlg')).includes('يُستخدم في') && await page.isDisabled('#mediaDlg [data-mdel]'), 'used image: shows where it is used and delete is disabled');
+    await page.click('#mediaDlg [data-mclose] >> nth=-1');
+    // عرض القائمة + الفرز + البحث + فلتر الاستخدام
+    await page.click('[data-act=media-view][data-v=list]');
+    await page.waitForSelector('.mtbl');
+    ok((await page.$$('.mtbl tbody tr')).length === nMedia, 'list view shows the same files');
+    await page.selectOption('#mSort', 'size');
+    const sizes = await page.$$eval('.mtbl tbody tr td.nm', (a) => a.map((x) => x.textContent));
+    ok(sizes.length === nMedia, 'sorting by size keeps all rows');
+    await page.fill('#mq', 'zzz-no-such-file');
+    await page.waitForSelector('[data-region=mediaGrid] .state');
+    ok((await page.textContent('[data-region=mediaGrid]')).includes('لا صور مطابقة'), 'search with no match shows an empty state');
+    await page.fill('#mq', '');
+    await page.click('[data-act=media-view][data-v=grid]'); await page.waitForSelector('.mcard');
+    // رفع متعدد: ملفان صالحان + ملف غير صالح (يُرفض برسالة) — ثم تنظيف آمن
+    const png1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+    const png2 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    await page.setInputFiles('#mediaFile', [{ name: 'multi-a.png', mimeType: 'image/png', buffer: png1 }, { name: 'multi-b.png', mimeType: 'image/png', buffer: png2 }, { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') }]);
+    await page.waitForFunction((n) => document.querySelectorAll('.mcard').length === n + 2, nMedia, { timeout: 10000 });
+    ok(true, 'multiple images uploaded in one go');
+    ok((await page.textContent('#errPanel')).includes('نوع غير مدعوم'), 'invalid file in a batch is reported, valid ones still upload');
+    await page.click('[data-act=dismiss-err]');
+    const usedBefore = await page.$$eval('.mcard .badge.kind', (a) => a.length);
+    await page.click('[data-act=media-filter][data-v=free]');
+    const nFree = await page.$$eval('.mcard', (a) => a.length);
+    ok(nFree >= 2, `unused filter lists unused images (${nFree})`);
+    await page.waitForSelector('#mediaCleanBtn:not([hidden])');
+    await page.click('#mediaCleanBtn'); await confirmYes();
+    await page.waitForFunction(() => !document.querySelector('.mcard'), null, { timeout: 8000 });
+    await page.click('[data-act=media-filter][data-v=all]'); await page.waitForSelector('.mcard');
+    ok((await page.$$eval('.mcard', (a) => a.length)) === usedBefore, 'cleanup removed only the unused images (used ones remain)');
     await shot('09-media');
     await tab('publish');
     await page.waitForSelector('[data-region=audit] .ak', { timeout: 8000 });
