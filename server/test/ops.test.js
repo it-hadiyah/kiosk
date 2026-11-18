@@ -40,6 +40,8 @@ test('security headers: strict CSP on the panel, no-store on admin API, nosniff 
   assert.ok(me.json.security.weakPasswordRoles.includes('manager'));
   assert.ok(!me.json.security.weakPasswordRoles.includes('super'));
   assert.equal(me.json.security.https, false);
+  assert.deepEqual(me.json.security.roleMatrix.viewer, ['read']);
+  assert.ok(me.json.security.roleMatrix.editor.includes('upload') && !me.json.security.roleMatrix.editor.includes('publish'));
   assert.equal((await as('editor', 'GET', '/api/admin/me')).json.security, undefined);
 });
 

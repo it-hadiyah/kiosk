@@ -220,6 +220,7 @@ function settingsErrors(s) {
   { const th = s.theme || {}; const c1 = contrastHex(th.primary, '#FFFFFF'), c2 = contrastHex(th.ink, '#F4F6F6');
     if (c1 < 3) e.themePrimary = `اللون الأساسي فاتح جداً (التباين ${c1.toFixed(1)} — المطلوب 3 على الأقل)`;
     if (c2 < 4.5) e.themeInk = `لون النصوص باهت (التباين ${c2.toFixed(1)} — المطلوب 4.5 على الأقل)`; }
+  if (isNum(s.idleSeconds) && isNum(s.warnSeconds) && s.warnSeconds > s.idleSeconds) e.warnSeconds = 'مهلة التنبيه يجب ألا تتجاوز مهلة الخمول';
   if (!s.quickAmounts.length) e.quickAmounts = 'أضف مبلغاً سريعاً واحداً على الأقل (حتى 8)';
   else if (isNum(s.maxAmount) && s.quickAmounts.some((n) => n > s.maxAmount)) e.quickAmounts = 'بعض المبالغ السريعة أكبر من أقصى مبلغ';
   return e;
@@ -932,10 +933,16 @@ function render(full = true) {
   if (ui.tab === 'settings') validateSettingsUI();
 }
 function refreshRegions() {
-  $$('[data-region]').forEach((el) => {
-    if (el.contains(document.activeElement) && document.activeElement !== document.body && !ui.forceRegions) return;
-    const fn = regions[el.dataset.region]; if (fn) el.innerHTML = fn();
-  });
+  const seen = new Set();
+  for (let pass = 0; pass < 3; pass++) {            // مناطق متداخلة: نعيد الفحص بعد كل استبدال
+    let again = false;
+    $$('[data-region]').forEach((el) => {
+      if (seen.has(el) || !el.isConnected) return; seen.add(el);
+      if (el.contains(document.activeElement) && document.activeElement !== document.body && !ui.forceRegions) return;
+      const fn = regions[el.dataset.region]; if (fn) { el.innerHTML = fn(); if (el.querySelector('[data-region]')) again = true; }
+    });
+    if (!again) break;
+  }
   updateChrome();
 }
 function validateFeatUI() {

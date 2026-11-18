@@ -39,6 +39,7 @@ async function main() {
 
   const saved = () => page.waitForFunction(() => !state.dirty && !state.saving && state.saveStatus === 'saved', null, { timeout: 8000 });
   const tab = (k) => page.click(`[data-act=tab][data-tab=${k}]`);
+  const secTab = async (k) => { await page.click('[data-act=tab][data-tab=settings]'); await page.click(`[data-act=set-sec][data-v=${k}]`); };
   const confirmYes = async () => { await page.waitForSelector('#dlg[open]'); await page.click('#dlgYes'); };
   const rowsOf = (sel = '#pvHomeGrid') => page.$$eval(`${sel} .pv-row`, (rows) => rows.map((r) => Array.from(r.querySelectorAll('.tile')).map((t) => t.className.match(/s-(small|medium|large)/)[1])));
   const shot = (n, o = {}) => page.screenshot({ path: path.join(SHOTS, n + '.png'), fullPage: true, ...o });
@@ -199,12 +200,20 @@ async function main() {
 
     /* ---------- الإعدادات ---------- */
     console.log('== settings');
-    await tab('settings');
+    await secTab('sessions');
     await page.fill('[data-ctx=set][data-f=idleSeconds]', '90');
     await page.fill('[data-ctx=set][data-f=warnSeconds]', '20');
+    ok((await page.textContent('[data-region=setRelation]')).includes('110'), 'sessions: idle+warn relation shows the total (110 s)');
+    await page.fill('[data-ctx=set][data-f=warnSeconds]', '120');
+    ok((await page.textContent('[data-region=setRelation]')).includes('غير منطقي'), 'sessions: warn longer than idle is flagged as illogical');
+    ok((await page.textContent('[data-err=warnSeconds]')).includes('يجب ألا تتجاوز'), 'sessions: inline error blocks warn > idle');
+    await page.fill('[data-ctx=set][data-f=warnSeconds]', '20');
+    await secTab('amounts');
     await page.fill('[data-chipin="set:quickAmounts"]', '25'); await page.click('[data-act=chip-add]');
+    await secTab('general');
     await page.fill('[data-ctx=set][data-f="homeTitle.en"]', 'Give with joy');
     await saved();
+    await secTab('screen');
     // رفع صورة كبيرة لتجربة التصغير
     const big = await page.evaluate(async () => {
       const cv = document.createElement('canvas'); cv.width = 3200; cv.height = 2000; const g = cv.getContext('2d');
@@ -219,6 +228,7 @@ async function main() {
     await page.evaluate(() => handleFile('welcome', new File(['x'], 'a.gif', { type: 'image/gif' })));
     ok((await page.textContent('.imgp-err')).includes('غير مدعوم'), 'unsupported file type error');
     await saved();
+    await secTab('sessions');
     await page.fill('[data-ctx=set][data-f=idleSeconds]', '5');
     ok((await page.textContent('[data-err=idleSeconds]')).length > 0, 'inline error on idleSeconds out of range');
     await page.fill('[data-ctx=set][data-f=idleSeconds]', '90');
@@ -378,7 +388,7 @@ async function main() {
     await page.click('[data-act=close-editor] >> nth=-1');
     ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no horizontal overflow at 390px');
     await page.setViewportSize({ width: 360, height: 740 });
-    for (const k of ['home', 'programs', 'catalogs', 'settings', 'publish']) { await tab(k); ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `no horizontal overflow at 360px (${k})`); }
+    for (const k of ['overview', 'dashboard', 'devices', 'home', 'programs', 'catalogs', 'media', 'settings', 'publish']) { await tab(k); ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `no horizontal overflow at 360px (${k})`); }
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.emulateMedia({ colorScheme: 'dark' });
     for (const [k, n] of [['home', '1-home'], ['programs', '2-programs'], ['publish', '5-publish']]) { await tab(k); await page.waitForTimeout(200); await shot(`dark-${n}`); }
@@ -475,7 +485,7 @@ async function main() {
     await page.click('[data-act=logout]'); await page.waitForSelector('#loginPw');
     await page.fill('#loginPw', PASS); await page.click('#loginBtn');
     await page.waitForFunction(() => document.body.dataset.role === 'super');
-    await tab('settings');
+    await secTab('screen');
     await page.waitForSelector('#thPrimary');
     await page.$eval('#thPrimary', (el) => { el.value = '#C0392B'; el.dispatchEvent(new Event('input', { bubbles: true })); });
     await page.click('[data-act=theme-radius][data-v=round]');
@@ -633,6 +643,19 @@ async function main() {
     await page.click('[data-act=dash-mode][data-v=simulation]');
     await page.waitForSelector('[data-region=dashBody] .kpis');
     await adm('DELETE', '/api/admin/stats');
+
+    /* ---------- الإعدادات: الأمان واللغة والأجهزة ---------- */
+    console.log('== settings sections');
+    await secTab('security');
+    const secTxt = await page.textContent('[data-region=setBody]');
+    ok(secTxt.includes('مصفوفة الصلاحيات') && secTxt.includes('كلمات المرور') && secTxt.includes('HTTPS'), 'security section: password/HTTPS status and permission matrix');
+    ok((await page.$$('[data-region=setBody] .tbl tbody tr')).length === 9, 'permission matrix lists all 9 permissions');
+    await page.click('[data-act=set-sec][data-v=lang]');
+    ok((await page.textContent('[data-region=setBody]')).includes('اردو'), 'language section lists the four languages');
+    await page.click('[data-act=set-sec][data-v=devices]');
+    ok((await page.textContent('[data-region=setBody]')).includes('دقائق دون جلب المحتوى'), 'devices section explains the offline threshold');
+    await page.click('[data-act=set-sec][data-v=publish]');
+    ok((await page.textContent('[data-region=setBody]')).includes('النشر والنسخ'), 'publish section explains the workflow');
 
     ok(jsErrors.length === 0, 'no JS console/page errors' + (jsErrors.length ? ': ' + jsErrors.join(' | ') : ''));
   } catch (e) {

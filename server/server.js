@@ -649,7 +649,7 @@ async function handle(req, res) {
       const out = { role: who.role, can: [...ROLE_CAN[who.role]] };
       if (who.role === 'super') {
         const configured = ROLE_PASSWORDS.map(([n, g]) => [n, g()]).filter(([, v]) => v);
-        out.security = { weakPasswordRoles: configured.filter(([, v]) => weakPassword(v)).map(([n]) => n), rolesConfigured: configured.map(([n]) => n), https: !!(req.socket.encrypted || req.headers['x-forwarded-proto'] === 'https'), generatedAdminPassword: generatedPassword, tokenHours: TOKEN_TTL_MS / 3_600_000 };
+        out.security = { weakPasswordRoles: configured.filter(([, v]) => weakPassword(v)).map(([n]) => n), rolesConfigured: configured.map(([n]) => n), https: !!(req.socket.encrypted || req.headers['x-forwarded-proto'] === 'https'), generatedAdminPassword: generatedPassword, tokenHours: TOKEN_TTL_MS / 3_600_000, roleMatrix: Object.fromEntries(Object.entries(ROLE_CAN).map(([k, v]) => [k, [...v]])), offlineMinutes: OFFLINE_MS / 60000, codeValidityHours: CODE_TTL_MS / 3_600_000, auditMaxMB: AUDIT_MAX_BYTES / 1048576 };
       }
       return send(res, 200, out);
     }

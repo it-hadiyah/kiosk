@@ -36,7 +36,7 @@ const bar = (v, max) => `<span class="bar"><i style="width:${max ? Math.round((v
 /* ---------- الأدوار ---------- */
 async function onBoot() {
   if (backend.devices) { try { ui.devs = await backend.devices(); } catch (e) { ui.devs = []; } }
-  if (backend.me) { try { const m = await backend.me(); ui.role = m.role; ui.can = new Set(m.can || []); } catch (e) { /* يبقى الافتراضي */ } }
+  if (backend.me) { try { const m = await backend.me(); ui.role = m.role; ui.can = new Set(m.can || []); ui.security = m.security || null; } catch (e) { /* يبقى الافتراضي */ } }
   if (!can('devices')) { const i = TABS.findIndex((t) => t.k === 'devices'); if (i >= 0) TABS.splice(i, 1); }
   if (!can('stats')) { const i = TABS.findIndex((t) => t.k === 'dashboard'); if (i >= 0) TABS.splice(i, 1); }
   ALL_PERMS.forEach((p) => document.body.classList.toggle('can-' + p, can(p)));
@@ -157,8 +157,6 @@ document.addEventListener('click', (ev) => {
 /* ---------- الهوية البصرية (ألوان + استدارة) داخل الإعدادات ---------- */
 const THEME_DEF = { primary: '#00A092', ink: '#1F4A47', radius: 'normal' };
 const RADIUS_LABEL = { sharp: 'حادة', normal: 'عادية', round: 'مستديرة' };
-const _viewSettings = viewSettings;
-VIEWS.settings = () => _viewSettings().replace(/<\/div>\s*$/, '<div data-region="themeCard"></div></div>');
 function themeInfoHtml() {
   const t = C().settings.theme; const e = settingsErrors(C().settings);
   const c1 = contrastHex(t.primary, '#FFFFFF'), c2 = contrastHex(t.ink, '#F4F6F6');

@@ -581,3 +581,12 @@ details.details[open] > summary { margin-bottom: var(--s3); }
 .sev-chip.error { background: var(--danger-soft); color: var(--danger); border-color: transparent; } .sev-chip.warn { background: var(--warn-soft); color: var(--warn-ink); border-color: transparent; } .sev-chip.info { background: var(--info-soft); color: var(--info-ink); border-color: transparent; }
 .ddet { gap: var(--s4); align-items: start; }
 .dlg.wide h4 { margin: var(--s4) 0 var(--s2); }
+
+/* ===== الإعدادات v2 ===== */
+.setnav { flex-wrap: wrap; margin-bottom: var(--s4); }
+.relation { margin-top: var(--s4); padding: var(--s3) var(--s4); background: var(--card2); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.relation.bad { background: var(--danger-soft); border-color: transparent; color: var(--danger); }
+.rl-bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; gap: 2px; margin-bottom: var(--s2); }
+.rl-i { background: var(--brand); } .rl-w { background: var(--warn); } .relation.bad .rl-w { background: var(--danger); }
+.plainlist { margin: 0 0 var(--s3); padding-inline-start: 20px; display: flex; flex-direction: column; gap: var(--s1); }
+code { background: var(--card2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: .92em; }
