@@ -590,3 +590,17 @@ details.details[open] > summary { margin-bottom: var(--s3); }
 .rl-i { background: var(--brand); } .rl-w { background: var(--warn); } .relation.bad .rl-w { background: var(--danger); }
 .plainlist { margin: 0 0 var(--s3); padding-inline-start: 20px; display: flex; flex-direction: column; gap: var(--s1); }
 code { background: var(--card2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: .92em; }
+
+/* ---- النشر والنسخ v2 ---- */
+.chipx { display: inline-block; padding: 1px 10px; border-radius: 99px; background: var(--brand-soft); color: var(--brand-strong); font-size: 12.5px; font-weight: 700; }
+.tagx { margin-inline-start: auto; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 99px; background: var(--card2); color: var(--muted); }
+.tagx.ok { background: var(--ok-soft); color: var(--ok-ink); } .tagx.warn { background: var(--warn-soft); color: var(--warn-ink); } .tagx.error { background: #fde8e8; color: var(--danger); }
+.pfl { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pfc { padding: 10px 12px; border-radius: 10px; background: var(--card2); border-inline-start: 4px solid var(--ok); }
+.pfc.warn { border-inline-start-color: var(--warn); } .pfc.error { border-inline-start-color: var(--danger); }
+.pfc-h { display: flex; align-items: center; gap: 8px; } .pfc p { margin: 4px 0 0; }
+.pfi { margin: 6px 0 0; padding-inline-start: 22px; font-size: 14px; } .pfi .linkbtn { font-size: 14px; font-weight: 600; }
+.hist2 { list-style: none; } .hist2 .row { flex-wrap: wrap; }
+.cmpbox { margin: 4px 0 10px; padding: 8px 12px; border-radius: 10px; background: var(--card2); }
+.relog { margin-top: 12px; } .relog summary { cursor: pointer; font-weight: 700; padding: 6px 0; } .relog .tbl { margin-top: 6px; }
+.dg li.add::before { content: "+ "; font-weight: 800; color: var(--ok-ink); } .dg li.del::before { content: "− "; font-weight: 800; color: var(--danger); }

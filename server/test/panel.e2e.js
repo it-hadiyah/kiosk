@@ -244,8 +244,16 @@ async function main() {
     const diffTxt = await page.textContent('[data-region=diff]');
     ok(diffTxt.includes('إضافة برنامج «كسوة الشتاء»') && diffTxt.includes('إضافة كتالوج «حملة الشتاء»') && diffTxt.includes('مهلة الخمول'), 'diff summary lists added program/catalog/settings change');
     ok((await page.textContent('#pill')).includes('مسودة محفوظة'), 'pill = مسودة محفوظة before publish');
+    await page.waitForFunction(() => document.querySelector('[data-region=pubChecks] .pfl'));
+    const pfTxt = await page.textContent('[data-region=pubChecks]');
+    ok(pfTxt.includes('فحص ما قبل النشر') && pfTxt.includes('سلامة البيانات'), 'publish: preflight checks listed');
+    ok((await page.textContent('[data-region=pubStatus]')).includes('الإصدار التالي: 1'), 'publish: next release number shown');
+    ok(await page.isVisible('[data-region=pubStatus] [data-act=discard-draft]'), 'publish: discard-draft button available');
     await shot('05-publish-desktop');
-    await page.click('[data-act=publish]'); await confirmYes();
+    await page.click('[data-act=publish]');
+    await page.waitForFunction(() => document.querySelector('#dlg[open]'));
+    ok((await page.textContent('#dlgMsg')).includes('سيُنشر الإصدار 1'), 'publish confirm dialog states the release number and impact');
+    await confirmYes();
     await page.waitForFunction(() => state.hasUnpublished === false && !ui.pubBusy);
     ok((await page.textContent('#pill')).includes('منشور'), 'pill = منشور after publish');
     const live = await getJson(BASE + '/api/catalog');
@@ -263,10 +271,19 @@ async function main() {
     await page.waitForSelector('[data-region=history] .hist', { timeout: 8000 });
     ok((await page.$$('[data-region=history] .hist')).length >= 1, 'backup history listed after publish');
     await shot('05-publish-desktop-after');
+    await page.waitForFunction(() => document.querySelector('[data-region=pubStatus]').textContent.includes('الإصدار المنشور الحالي'));
+    ok((await page.textContent('[data-region=pubStatus]')).includes('الإصدار المنشور الحالي: 1'), 'publish: status shows current release 1');
+    ok((await page.textContent('[data-region=history]')).includes('الإصدار'), 'history rows carry release information');
+    await page.click('[data-region=history] [data-act=hist-cmp] >> nth=0');
+    await page.waitForSelector('.cmpbox .dg, .cmpbox .muted');
+    ok((await page.textContent('.cmpbox')).length > 10, 'history: compare with the draft expands');
+    await page.click('[data-region=history] [data-act=hist-cmp] >> nth=0');
 
     /* ---------- استرجاع نسخة ---------- */
     console.log('== restore');
-    await page.click('[data-act=restore] >> nth=0'); await confirmYes();
+    await page.click('[data-act=restore] >> nth=0');
+    ok((await page.textContent('#dlgMsg')).includes('لن تظهر للمتبرعين إلا بعد'), 'restore confirmation explains it only reaches the draft');
+    await confirmYes();
     await page.waitForFunction(() => !state.catalog.programs.some((p) => p.id === 'winter-clothes'), null, { timeout: 8000 });
     ok(true, 'restore loads backup into draft (new program gone)');
     ok((await page.textContent('#pill')).includes('مسودة محفوظة'), 'after restore: draft differs from live');
