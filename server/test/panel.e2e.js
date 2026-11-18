@@ -353,7 +353,7 @@ async function main() {
     await tab('overview');
     await page.waitForFunction(() => ui.stats && document.querySelector('[data-region=ovStats]').textContent.includes('محاكاة مكتملة'), null, { timeout: 8000 });
     ok((await page.textContent('[data-region=ovStats]')).includes('بيانات تجريبية'), 'overview stats labelled as demo data');
-    ok((await page.textContent('[data-region=ovDevices]')).includes('e2e-kiosk') && (await page.textContent('[data-region=ovDevices]')).includes('9.9.9'), 'overview lists kiosk device with version');
+    ok((await page.textContent('[data-region=ovDevices]')).includes('أجهزة الكيوسك'), 'overview has the kiosk devices section');
     ok((await page.$$('[data-region=ovCards] .stat')).length === 6, 'overview shows 6 summary cards');
     ok((await page.textContent('[data-region=ovTr]')).includes('العربية'), 'translations table rendered');
     await shot('08-overview');
@@ -415,6 +415,51 @@ async function main() {
     ok((await page.textContent('#themeInfo')).includes('لن تُحفظ'), 'low-contrast primary is flagged and blocked');
     await page.click('[data-act=theme-reset]'); await saved();
     eq(await page.evaluate(() => C().settings.theme), { primary: '#00A092', ink: '#1F4A47', radius: 'normal' }, 'theme reset to defaults');
+
+    /* ---------- الأجهزة: جلسات الكيوسكات ---------- */
+    console.log('== devices: kiosk sessions');
+    await tab('devices');
+    await page.waitForSelector('[data-act=sess-new]');
+    await page.click('[data-act=sess-new]');
+    await page.waitForSelector('#askDlg[open]');
+    await page.fill('#ask0', 'بهو الفرع');
+    await page.click('#askDlg button[value=yes]');
+    await page.waitForSelector('#codeDlg[open] #bigCode');
+    const codeTxt = (await page.textContent('#bigCode')).replace(/\D/g, '');
+    ok(/^\d{8}$/.test(codeTxt), `session id shown (8 digits): ${codeTxt}`);
+    await page.click('#codeDlg button[value=yes]');
+    await page.waitForSelector('.scard.pending');
+    ok((await page.textContent('.scard.pending')).includes('بهو الفرع'), 'pending session card shows its place');
+    // الكيوسك يفعّل نفسه بالمعرف + الاسم
+    const actRes = await fetch(BASE + '/api/device/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: codeTxt, name: 'كيوسك المدخل', deviceId: 'e2e-dev', appVersion: '3.2.1' }) });
+    const act = await actRes.json();
+    ok(actRes.status === 200 && act.token, 'kiosk activates with session id + name');
+    await page.click('[data-act=ov-refresh]').catch(() => {});
+    await tab('overview'); await tab('devices');
+    await page.waitForSelector('.scard.active');
+    const cardTxt = await page.textContent('.scard.active');
+    ok(cardTxt.includes('كيوسك المدخل') && cardTxt.includes('3.2.1') && cardTxt.includes('نشط'), 'active session card: name, version, status');
+    await shot('11-devices');
+    // إعادة تسمية
+    await page.click('.scard.active [data-act=sess-rename]');
+    await page.waitForSelector('#askDlg[open]');
+    await page.fill('#ask0', 'المدخل الرئيسي');
+    await page.click('#askDlg button[value=yes]');
+    await page.waitForFunction(() => document.querySelector('.scard.active .sc-name').textContent.includes('المدخل الرئيسي'));
+    ok(true, 'kiosk renamed from the panel');
+    // أرى الكيوسك في «نظرة عامة»
+    await tab('overview');
+    await page.waitForFunction(() => document.querySelector('[data-region=ovDevices]').textContent.includes('المدخل الرئيسي'), null, { timeout: 8000 });
+    ok(true, 'overview lists the activated kiosk by name');
+    // إنهاء الجلسة ← الكيوسك يُبلَّغ
+    await tab('devices');
+    await page.click('.scard.active [data-act=sess-end]'); await confirmYes();
+    await page.waitForSelector('.scard.ended');
+    const after = await fetch(BASE + '/api/catalog', { headers: { 'X-Kiosk-Token': act.token } });
+    ok(after.status === 401 && (await after.json()).code === 'session_ended', 'ended session → kiosk gets 401 session_ended');
+    await page.click('.scard.ended [data-act=sess-del]'); await confirmYes();
+    await page.waitForFunction(() => !document.querySelector('.scard.ended'));
+    ok(true, 'ended session record deleted');
 
     ok(jsErrors.length === 0, 'no JS console/page errors' + (jsErrors.length ? ': ' + jsErrors.join(' | ') : ''));
   } catch (e) {

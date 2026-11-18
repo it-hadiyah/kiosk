@@ -87,7 +87,12 @@ const serverBackend = {
     const d = await this._req('/api/login', { method: 'POST', auth: false, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
     this._setTk(d.token); return true;
   },
-  features: { roles: true, audit: true, stats: true, media: true, deleteMedia: true },
+  features: { roles: true, audit: true, stats: true, media: true, deleteMedia: true, devices: true },
+  async sessions() { return (await this._req('/api/admin/sessions')).sessions; },
+  async createSession(label) { return (await this._req('/api/admin/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) })).session; },
+  async endSession(id) { return this._req('/api/admin/sessions/' + id + '/end', { method: 'POST' }); },
+  async renameSession(id, kioskName, label) { return this._req('/api/admin/sessions/' + id + '/rename', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kioskName, label }) }); },
+  async deleteSession(id) { return this._req('/api/admin/sessions/' + id, { method: 'DELETE' }); },
   async me() { return this._req('/api/admin/me'); },
   async media() { return (await this._req('/api/admin/media')).media; },
   async deleteMedia(name) { return this._req('/api/admin/media?name=' + encodeURIComponent(name), { method: 'DELETE' }); },

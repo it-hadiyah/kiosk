@@ -6,8 +6,8 @@
    ===================================================================== */
 'use strict';
 
-const ALL_PERMS = ['read', 'edit', 'upload', 'publish', 'settings', 'media_delete', 'audit', 'stats'];
-const ROLE_LABEL = { super: 'مدير النظام', manager: 'مدير المحتوى', editor: 'محرّر', viewer: 'مشاهد' };
+const ALL_PERMS = ['read', 'edit', 'upload', 'publish', 'settings', 'media_delete', 'audit', 'stats', 'devices'];
+const ROLE_LABEL = { super: 'مدير النظام', manager: 'مدير المحتوى', editor: 'محرّر', viewer: 'مشاهد', device: 'كيوسك' };
 ui.role = 'super'; ui.can = new Set(ALL_PERMS);
 const can = (p) => ui.can.has(p);
 const feat = (f) => !!(backend.features && backend.features[f]);
@@ -18,6 +18,8 @@ ICONS.monitor = 'M3 4h18v12H3zM8 20h8M12 16v4';
 
 TABS.unshift({ k: 'overview', label: 'نظرة عامة', icon: 'chart' });
 TABS.splice(TABS.findIndex((t) => t.k === 'settings'), 0, { k: 'media', label: 'الوسائط', icon: 'image' });
+if (feat('devices')) TABS.splice(TABS.findIndex((t) => t.k === 'settings'), 0, { k: 'devices', label: 'الأجهزة', icon: 'monitor' });
+VIEWS.devices = () => viewDevices();
 VIEWS.overview = () => viewOverview();
 VIEWS.media = () => viewMedia();
 ui.tab = 'overview';
@@ -34,6 +36,7 @@ const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) + '%' : '—');
 /* ---------- الأدوار ---------- */
 async function onBoot() {
   if (backend.me) { try { const m = await backend.me(); ui.role = m.role; ui.can = new Set(m.can || []); } catch (e) { /* يبقى الافتراضي */ } }
+  if (!can('devices')) { const i = TABS.findIndex((t) => t.k === 'devices'); if (i >= 0) TABS.splice(i, 1); }
   ALL_PERMS.forEach((p) => document.body.classList.toggle('can-' + p, can(p)));
   document.body.dataset.role = ui.role;
   const top = $('.top-status');
@@ -142,14 +145,20 @@ regions.ovStats = () => {
     ${days.length ? `<h4>آخر الأيام</h4><div class="trwrap"><table class="trt"><thead><tr><th>اليوم</th><th>جلسات</th><th>مكتملة</th></tr></thead><tbody>${days.map((d) => `<tr><td>${esc(d)}</td><td>${nf(S.daily[d].sessions)}</td><td>${nf(S.daily[d].completed)}</td></tr>`).join('')}</tbody></table></div>` : ''}</section>`;
 };
 regions.ovDevices = () => {
-  if (!feat('stats') || !can('stats') || !ui.stats) return '';
-  const devs = Object.entries(ui.stats.devices || {}).map(([id, d]) => ({ id, ...d })).sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
+  const bySess = feat('devices') && can('devices');
+  if (!bySess && !(feat('stats') && can('stats') && ui.stats)) return '';
+  if (bySess && !ui.sessions) return '';
+  const devs = bySess
+    ? ui.sessions.filter((x) => x.status === 'active').map((x) => ({ id: x.kioskName || x.id, sub: x.label, lastSeen: x.lastSeen, version: x.version }))
+    : Object.entries(ui.stats.devices || {}).map(([id, d]) => ({ id, ...d }));
+  devs.sort((a2, b2) => String(b2.lastSeen || '').localeCompare(String(a2.lastSeen || '')));
   return `<section class="card"><h3>أجهزة الكيوسك <span class="count">${nf(devs.length)}</span></h3>
-    ${devs.length ? `<ul class="rows plain">${devs.map((d) => { const on = Date.now() - new Date(d.lastSeen).getTime() < 3 * 60 * 1000;
-      return `<li class="row"><span class="dot ${on ? 'on' : 'off'}" aria-hidden="true"></span><div class="row-t"><strong dir="ltr">${esc(d.id)}</strong><div class="muted small">آخر اتصال ${esc(ago(d.lastSeen))} · إصدار التطبيق ${esc(d.version || '—')}</div></div><span class="badge ${on ? 'kind' : 'off'}">${on ? 'متصل' : 'غير متصل'}</span></li>`; }).join('')}</ul>` : '<p class="muted">لم يتصل أي كيوسك بعد. يظهر الجهاز هنا بعد أول تحديث للكتالوج.</p>'}</section>`;
+    ${devs.length ? `<ul class="rows plain">${devs.map((d) => { const on = d.lastSeen && Date.now() - new Date(d.lastSeen).getTime() < 3 * 60 * 1000;
+      return `<li class="row"><span class="dot ${on ? 'on' : 'off'}" aria-hidden="true"></span><div class="row-t"><strong>${esc(d.id)}</strong><div class="muted small">${d.sub ? esc(d.sub) + ' · ' : ''}آخر اتصال ${esc(ago(d.lastSeen))} · إصدار التطبيق ${esc(d.version || '—')}</div></div><span class="badge ${on ? 'kind' : 'off'}">${on ? 'متصل' : 'غير متصل'}</span></li>`; }).join('')}</ul>` : `<p class="muted">لا يوجد كيوسك مفعّل بعد. ${bySess ? 'افتح جلسة من تبويب «الأجهزة» ثم أدخل معرفها في الكيوسك.' : ''}</p>`}</section>`;
 };
 async function loadOverviewData() {
   try { ui.live = normClient(await backend.fetchLive()); } catch (e) { /* يبقى */ }
+  if (feat('devices') && can('devices')) { try { ui.sessions = await backend.sessions(); } catch (e) { /* يبقى */ } }
   if (feat('stats') && can('stats')) { try { ui.stats = await backend.stats(); ui.statsErr = ''; } catch (e) { ui.stats = null; ui.statsErr = e.message || 'تعذّر تحميل الإحصائيات'; } }
   refreshRegions();
 }
@@ -200,7 +209,7 @@ async function openLibrary(pk) {
 }
 
 /* ---------- سجل التدقيق ---------- */
-const AUDIT_LABEL = { login: 'دخول', login_failed: 'دخول فاشل', draft_save: 'تعديل مسودة', publish: 'نشر', restore: 'استرجاع', upload: 'رفع صورة', media_delete: 'حذف صورة', stats_reset: 'تصفير الإحصائيات' };
+const AUDIT_LABEL = { login: 'دخول', login_failed: 'دخول فاشل', draft_save: 'تعديل مسودة', publish: 'نشر', restore: 'استرجاع', upload: 'رفع صورة', media_delete: 'حذف صورة', stats_reset: 'تصفير الإحصائيات', session_create: 'فتح جلسة', device_activate: 'تفعيل كيوسك', session_end: 'إنهاء جلسة', device_end: 'إنهاء من الكيوسك', session_rename: 'تعديل كيوسك', session_delete: 'حذف جلسة' };
 regions.audit = () => {
   if (!feat('audit')) return `<section class="card"><h3>سجل التدقيق</h3><p class="muted">متاح عند الاتصال بالخادم (غير متاح في النسخة التجريبية).</p></section>`;
   if (!can('audit')) return '';
@@ -216,7 +225,12 @@ async function loadAudit() {
 }
 
 /* ---------- ربط التبويبات والإجراءات ---------- */
-function onTab(k) { if (k === 'overview') loadOverviewData(); if (k === 'media') loadMedia(); }
+function onTab(k) {
+  clearInterval(ui.sessTimer);
+  if (k === 'overview') loadOverviewData();
+  if (k === 'media') loadMedia();
+  if (k === 'devices') { loadSessions(); ui.sessTimer = setInterval(() => { if (ui.tab === 'devices') loadSessions(); else clearInterval(ui.sessTimer); }, 30000); }
+}
 Object.assign(actions, {
   'ov-open'(el) { actions[el.dataset.kind === 'cat' ? 'edit-cat' : 'edit-prog'](el); },
   'ov-refresh'() { loadOverviewData(); },
@@ -290,4 +304,82 @@ function themeChanged() {
 Object.assign(actions, {
   'theme-radius'(el) { C().settings.theme.radius = el.dataset.v; $$('[data-act="theme-radius"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === el.dataset.v))); themeChanged(); const r = $('[data-region="themeCard"]'); if (r) r.innerHTML = regions.themeCard(); },
   'theme-reset'() { C().settings.theme = { ...THEME_DEF }; markDirty(); ui.forceRegions = true; refreshRegions(); ui.forceRegions = false; },
+});
+
+/* ---------- الأجهزة: جلسات الكيوسكات ---------- */
+const fmtCode = (c) => String(c || '').replace(/^(\d{4})(\d{4})$/, '$1-$2');
+const SESS_STATUS = { pending: ['بانتظار التفعيل', 'off'], active: ['نشط', 'kind'], ended: ['منتهية', 'off'] };
+function viewDevices() {
+  return `<div class="page-h"><div><h2>الأجهزة</h2><p class="muted">كل كيوسك يُفعَّل بمعرف جلسة تنشئه من هنا، ويُسمّى عند التفعيل. عند نقل الكيوسك إلى مكان آخر أنهِ جلسته وافتح له جلسة جديدة.</p></div>
+    ${can('devices') ? `<button class="btn primary" type="button" data-act="sess-new">${ic('plus')}فتح جلسة جديدة</button>` : ''}</div>
+  <section class="card steps"><h3>كيف أفعّل كيوسكاً؟</h3><ol><li>اضغط «فتح جلسة جديدة» (واكتب مكان الكيوسك إن أردت).</li><li>يظهر <b>معرف الجلسة</b> من 8 أرقام.</li><li>افتح التطبيق على الكيوسك، وأدخل المعرف مع <b>اسم الكيوسك</b> ثم «تفعيل».</li></ol></section>
+  <div data-region="devList"></div>`;
+}
+regions.devList = () => {
+  if (!ui.sessions) return `<p class="muted">${ui.sessErr ? esc(ui.sessErr) : 'جارٍ التحميل…'}</p>`;
+  if (!ui.sessions.length) return `<div class="empty">${ic('monitor')}<strong>لا توجد جلسات بعد</strong><p>اضغط «فتح جلسة جديدة» لتفعيل أول كيوسك.</p></div>`;
+  return `<div class="sgrid">${ui.sessions.map((x) => {
+    const on = x.status === 'active' && x.lastSeen && Date.now() - new Date(x.lastSeen).getTime() < 3 * 60 * 1000;
+    const [stTxt, stCls] = SESS_STATUS[x.status] || ['—', 'off'];
+    const expired = x.status === 'pending' && Date.parse(x.codeExpiresAt) < Date.now();
+    return `<article class="scard ${esc(x.status)}"><div class="sc-h"><span class="dot ${on ? 'on' : 'off'}" aria-hidden="true"></span>
+      <strong class="sc-name">${esc(x.kioskName || (x.status === 'pending' ? 'كيوسك جديد' : '—'))}</strong><span class="badge ${stCls}">${esc(expired ? 'انتهت صلاحية المعرف' : stTxt)}</span></div>
+      ${x.label ? `<div class="muted">المكان: ${esc(x.label)}</div>` : ''}
+      <div class="sc-code"><span>معرف الجلسة</span><b dir="ltr">${esc(fmtCode(x.code))}</b>${x.status === 'pending' && !expired ? `<button class="btn small" type="button" data-act="sess-copy" data-code="${esc(x.code)}">نسخ</button>` : ''}</div>
+      ${x.status === 'pending' ? `<p class="hint">${expired ? 'أنشئ جلسة جديدة' : 'أدخله في الكيوسك قبل ' + esc(fmtDate(x.codeExpiresAt))}</p>` : ''}
+      ${x.status === 'active' ? `<div class="muted small">آخر اتصال ${esc(ago(x.lastSeen))} · إصدار ${esc(x.version || '—')}</div><div class="muted small">جلسات المحاكاة ${nf(x.started || 0)} · المكتملة ${nf(x.completed || 0)} · فُعّل ${esc(ago(x.activatedAt))}</div>` : ''}
+      ${x.status === 'ended' ? `<div class="muted small">انتهت ${esc(ago(x.endedAt))}${x.kioskName ? '' : ''}</div>` : ''}
+      <div class="btnrow tight">${can('devices') ? `${x.status !== 'ended' ? `<button class="btn small" type="button" data-act="sess-rename" data-id="${esc(x.id)}">${ic('edit')}تعديل</button>` : ''}
+        ${x.status !== 'ended' ? `<button class="btn small danger-o" type="button" data-act="sess-end" data-id="${esc(x.id)}">${x.status === 'pending' ? 'إلغاء المعرف' : 'إنهاء الجلسة'}</button>` : `<button class="btn small danger-o" type="button" data-act="sess-del" data-id="${esc(x.id)}">${ic('trash')}حذف</button>`}` : ''}</div></article>`;
+  }).join('')}</div>`;
+};
+async function loadSessions(force) {
+  if (!feat('devices') || !can('devices')) return;
+  try { ui.sessions = await backend.sessions(); ui.sessErr = ''; } catch (e) { if (!ui.sessions) ui.sessErr = e.message || 'تعذّر تحميل الجلسات'; }
+  ui.forceRegions = !!force; refreshRegions(); ui.forceRegions = false;
+}
+function askFields(title, fields, okLabel = 'حفظ') {
+  return new Promise((res) => {
+    const old = $('#askDlg'); if (old) old.remove();
+    document.body.insertAdjacentHTML('beforeend', `<dialog id="askDlg" class="dlg ask"><form method="dialog"><h3>${esc(title)}</h3>${fields.map((f, i) => `<div class="field"><label for="ask${i}">${esc(f.label)}</label><input id="ask${i}" type="text" maxlength="${f.max || 60}" value="${esc(f.value || '')}" placeholder="${esc(f.ph || '')}" autocomplete="off"></div>`).join('')}
+      <div class="dlg-btns"><button class="btn ghost" type="button" data-ask-cancel>إلغاء</button><button class="btn primary" value="yes">${esc(okLabel)}</button></div></form></dialog>`);
+    const d = $('#askDlg');
+    d.addEventListener('click', (ev) => { if (ev.target.closest('[data-ask-cancel]')) d.close('no'); });
+    d.addEventListener('close', () => { const ok = d.returnValue === 'yes'; res(ok ? Object.fromEntries(fields.map((f, i) => [f.k, $('#ask' + i, d).value])) : null); d.remove(); });
+    d.showModal(); $('#ask0', d).focus();
+  });
+}
+function showCodeDlg(sess) {
+  const old = $('#codeDlg'); if (old) old.remove();
+  document.body.insertAdjacentHTML('beforeend', `<dialog id="codeDlg" class="dlg ask"><form method="dialog"><h3>معرف الجلسة الجديدة</h3>
+    <div class="bigcode" dir="ltr" id="bigCode">${esc(fmtCode(sess.code))}</div>
+    <p class="muted">${sess.label ? 'للمكان: ' + esc(sess.label) + '. ' : ''}اكتب هذا المعرف في شاشة التفعيل بالكيوسك مع اسم له. يعمل <b>لمرة واحدة</b> ويصلح 24 ساعة.</p>
+    <div class="dlg-btns"><button class="btn" type="button" data-copy-code="${esc(sess.code)}">نسخ</button><button class="btn primary" value="yes">تم</button></div></form></dialog>`);
+  const d = $('#codeDlg');
+  d.addEventListener('click', async (ev) => { const b = ev.target.closest('[data-copy-code]'); if (b) { try { await navigator.clipboard.writeText(b.dataset.copyCode); toast('تم نسخ المعرف ✓'); } catch (e) { toast(b.dataset.copyCode, 'warn'); } } });
+  d.addEventListener('close', () => d.remove()); d.showModal();
+}
+Object.assign(actions, {
+  async 'sess-new'() {
+    const v = await askFields('فتح جلسة كيوسك جديدة', [{ k: 'label', label: 'مكان الكيوسك (اختياري)', ph: 'مثال: بهو الفرع الرئيسي' }], 'إنشاء المعرف');
+    if (!v) return;
+    try { const sess = await backend.createSession(v.label); showCodeDlg(sess); await loadSessions(true); } catch (e) { toast(e.message || 'تعذّر إنشاء الجلسة', 'warn'); }
+  },
+  async 'sess-rename'(el) {
+    const x = (ui.sessions || []).find((q) => q.id === el.dataset.id); if (!x) return;
+    const v = await askFields('تعديل بيانات الكيوسك', [{ k: 'kioskName', label: 'اسم الكيوسك', value: x.kioskName, max: 40 }, { k: 'label', label: 'المكان', value: x.label }]);
+    if (!v) return;
+    try { await backend.renameSession(x.id, v.kioskName, v.label); toast('تم الحفظ ✓'); await loadSessions(true); } catch (e) { toast(e.message || 'تعذّر الحفظ', 'warn'); }
+  },
+  async 'sess-end'(el) {
+    const x = (ui.sessions || []).find((q) => q.id === el.dataset.id); if (!x) return;
+    const msg = x.status === 'pending' ? 'إلغاء هذا المعرف؟ لن يمكن استخدامه في الكيوسك.' : `إنهاء جلسة «${x.kioskName || x.id}»؟ سيعود الكيوسك إلى شاشة التفعيل خلال دقيقة ويحتاج معرف جلسة جديداً.`;
+    if (!(await confirmDlg(msg, x.status === 'pending' ? 'إلغاء المعرف' : 'إنهاء الجلسة', true))) return;
+    try { await backend.endSession(x.id); toast('تم'); await loadSessions(true); } catch (e) { toast(e.message || 'تعذّر الإنهاء', 'warn'); }
+  },
+  async 'sess-del'(el) {
+    if (!(await confirmDlg('حذف سجل هذه الجلسة نهائياً؟', 'حذف', true))) return;
+    try { await backend.deleteSession(el.dataset.id); toast('تم الحذف'); await loadSessions(true); } catch (e) { toast(e.message || 'تعذّر الحذف', 'warn'); }
+  },
+  async 'sess-copy'(el) { try { await navigator.clipboard.writeText(el.dataset.code); toast('تم نسخ المعرف ✓'); } catch (e) { toast(el.dataset.code, 'warn'); } },
 });
