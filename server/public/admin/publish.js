@@ -144,3 +144,5 @@ Object.assign(actions, {
     if (it && it.id) goTarget({ type: it.type, id: it.id });
   },
 });
+
+document.addEventListener('toggle', (ev) => { const d = ev.target; if (d && d.dataset && d.dataset.fdkey) { ui.fdOpen = ui.fdOpen || {}; ui.fdOpen[d.dataset.fdkey] = d.open; } }, true);

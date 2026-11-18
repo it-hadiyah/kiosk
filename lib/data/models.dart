@@ -267,8 +267,19 @@ class AppSettings {
 
 /// عنصر جاهز للعرض في الشبكة: برنامج أو كتالوج + حجمه.
 class Tile {
-  const Tile.program(Program this.program, this.size) : catalog = null;
-  const Tile.catalog(CatalogGroup this.catalog, this.size) : program = null;
+  const Tile.program(
+    Program this.program,
+    this.size, {
+    this.desc = Localized.empty,
+  }) : catalog = null;
+  const Tile.catalog(
+    CatalogGroup this.catalog,
+    this.size, {
+    this.desc = Localized.empty,
+  }) : program = null;
+
+  /// وصف اختياري يُعرض على شريحة «الأكثر رواجاً».
+  final Localized desc;
   final Program? program;
   final CatalogGroup? catalog;
   final TileSize size;
@@ -367,10 +378,12 @@ class CatalogData {
     if (h.isCatalog) {
       final c = catalog(h.id);
       if (c == null || !c.active || tilesOfCatalog(c).isEmpty) return null;
-      return Tile.catalog(c, h.size);
+      return Tile.catalog(c, h.size, desc: h.desc);
     }
     final p = program(h.id);
-    return (p == null || !p.active) ? null : Tile.program(p, h.size);
+    return (p == null || !p.active)
+        ? null
+        : Tile.program(p, h.size, desc: h.desc);
   }
 }
 
@@ -401,6 +414,7 @@ class FeaturedConfig {
                 h['type'] == 'catalog',
                 h['id'] as String,
                 TileSize.large,
+                desc: Localized.from(h['desc']),
               ),
       ],
     );
@@ -408,7 +422,13 @@ class FeaturedConfig {
 }
 
 class HomeEntry {
-  const HomeEntry(this.isCatalog, this.id, this.size);
+  const HomeEntry(
+    this.isCatalog,
+    this.id,
+    this.size, {
+    this.desc = Localized.empty,
+  });
+  final Localized desc;
   final bool isCatalog;
   final String id;
   final TileSize size;

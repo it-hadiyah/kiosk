@@ -175,3 +175,13 @@ test('analytics: simulation funnel + previous period; production mode is separat
   assert.equal(bad.status, 400); assert.equal(bad.json.code, 'production_disabled');
   assert.equal((await as('manager', 'GET', '/api/admin/dashboard?range=all')).json.amount, 50);
 });
+
+test('featured items keep a per-language description (trimmed to 160, dropped when empty)', () => {
+  const { normalize } = require('../validate');
+  const base = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '../seed/catalog.json'), 'utf8'));
+  const id = base.programs[0].id, id2 = base.programs[1].id;
+  base.featured = { enabled: true, items: [{ type: 'program', id, desc: { ar: 'وصف', en: 'x'.repeat(300) } }, { type: 'program', id: id2, desc: { ar: '  ' } }] };
+  const f = normalize(base).catalog.featured.items;
+  assert.equal(f[0].desc.ar, 'وصف'); assert.equal(f[0].desc.en.length, 160); assert.equal(f[0].desc.fr, '');
+  assert.equal(f[1].desc, undefined);
+});

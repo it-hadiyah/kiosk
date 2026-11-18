@@ -957,6 +957,35 @@ void main() {
     );
 
     testWidgets(
+      'featured carousel: shows the item description in the chosen language',
+      (t) async {
+        await start(
+          t,
+          _data(
+            programs: [_prog('c'), _prog('a')],
+            home: [
+              {'type': 'program', 'id': 'c'},
+              {'type': 'program', 'id': 'a'},
+            ],
+            featured: {
+              'enabled': true,
+              'items': [
+                {
+                  'type': 'program',
+                  'id': 'c',
+                  'desc': {'ar': 'وصف عربي', 'en': 'English text'},
+                },
+                {'type': 'program', 'id': 'a'},
+              ],
+            },
+          ),
+        );
+        expect(find.byKey(const Key('featured_desc')), findsOneWidget);
+        expect(find.text('وصف عربي'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
       'featured carousel: shows chosen items one at a time, rotates, tap opens',
       (t) async {
         await start(

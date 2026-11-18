@@ -184,6 +184,11 @@ async function main() {
     await page.fill('[data-ctx=feat][data-f="title.ar"]', 'الأكثر طلباً');
     ok((await page.textContent('.pv-fbadge')).includes('الأكثر طلباً'), 'preview badge uses custom title');
     ok((await page.textContent('.pv-ftxt h4')).includes('إفطار'), 'preview shows first featured item');
+    await page.click('.featdesc >> nth=0 >> summary');
+    await page.fill('[data-ctx=fi0][data-f="desc.ar"]', 'وجبة إفطار لصائم');
+    await page.fill('[data-ctx=fi0][data-f="desc.en"]', 'A meal for a fasting person');
+    ok((await page.textContent('.pv-fdesc')).includes('وجبة إفطار'), 'featured item description shows in the live preview');
+    ok((await page.$$('[data-ctx=fi0]')).length === 4, 'description editable in all four languages');
     eq(await page.$$eval('.pv-dots button', (b) => b.length), 2, 'two dots');
     await page.click('.pv-dots button >> nth=1');
     ok((await page.textContent('.pv-ftxt h4')).includes('سقيا'), 'dot click cycles to 2nd slide');
@@ -267,7 +272,7 @@ async function main() {
     ok(live.home.length === 6, 'home has 6 entries');
     ok(live.settings.idleSeconds === 90 && live.settings.warnSeconds === 20 && live.settings.quickAmounts.includes(25) && live.settings.homeTitle.en === 'Give with joy' && /\.jpg$/.test(live.settings.welcomeBackground), 'published settings reflect edits');
     ok(live.featured && live.featured.enabled === true && live.featured.intervalSeconds === 7 && live.featured.title.ar === 'الأكثر طلباً', 'published featured: enabled, interval 7, badge');
-    eq(live.featured.items, [{ type: 'program', id: 'iftar' }, { type: 'program', id: 'water' }], 'published featured items in order');
+    eq(live.featured.items, [{ type: 'program', id: 'iftar', desc: { ar: 'وجبة إفطار لصائم', fr: '', en: 'A meal for a fasting person', ur: '' } }, { type: 'program', id: 'water' }], 'published featured items in order');
     await page.waitForSelector('[data-region=history] .hist', { timeout: 8000 });
     ok((await page.$$('[data-region=history] .hist')).length >= 1, 'backup history listed after publish');
     await shot('05-publish-desktop-after');

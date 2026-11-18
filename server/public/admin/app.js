@@ -160,7 +160,7 @@ const tt = (o, lang = 'ar') => (o && o.title && (o.title[lang] || o.title.ar)) |
 const blankLoc = () => ({ ar: '', fr: '', en: '', ur: '' });
 
 function getPath(o, path) { return path.split('.').reduce((a, k) => (a == null ? a : a[k]), o); }
-function setPath(o, path, v) { const ks = path.split('.'); const last = ks.pop(); const t = ks.reduce((a, k) => a[k], o); t[last] = v; }
+function setPath(o, path, v) { const ks = path.split('.'); const last = ks.pop(); const t = ks.reduce((a, k) => (a[k] || (a[k] = {})), o); t[last] = v; }
 
 /* الكيان الذي يعدّله المحرّر / الإعدادات حسب السياق */
 /* يضمن وجود featured بقيم افتراضية (متوافق مع خوادم/بيانات تجريبية بلا هذا الحقل) */
@@ -176,6 +176,7 @@ const featIndex = (type, id) => C().featured.items.findIndex((x) => x.type === t
 function ctxObj(ctx) {
   if (ctx === 'set') return C().settings;
   if (ctx === 'feat') return C().featured;
+  { const m = /^fi(\d+)$/.exec(ctx); if (m) return C().featured.items[+m[1]] || null; }
   const e = ui.edit; if (!e) return null;
   if (ctx === 'prog' && e.type === 'prog') return e.creating ? e.obj : findProg(e.id);
   if (ctx === 'cat' && e.type === 'cat') return e.creating ? e.obj : findCat(e.id);
@@ -416,7 +417,7 @@ function featPreview(lang) {
   const badgeTxt = F.title[lang] || (F.title.ar && lang === 'ar' ? F.title.ar : FEAT_DEF[lang][0]);
   return `<div class="pv-feat" aria-label="الأكثر رواجاً"><div class="pv-slide" key="${i}" data-tile="${esc(cur.type)}:${esc(cur.obj.id)}">${imgTag(cur.obj.image, cur.obj.imageAlign)}
     <span class="pv-fbadge">${ic('flame')}${esc(badgeTxt)}</span>
-    <div class="pv-ftxt"><h4>${esc(tt(cur.obj, lang))}</h4><span class="pv-pill">${FEAT_DEF[lang][1]}</span></div>
+    <div class="pv-ftxt"><div><h4>${esc(tt(cur.obj, lang))}</h4>${(() => { const fi = F.items.find((x) => x.type === cur.type && x.id === cur.obj.id); const d = fi && fi.desc ? (fi.desc[lang] || fi.desc.ar || '') : ''; return d ? `<p class="pv-fdesc">${esc(d)}</p>` : ''; })()}</div><span class="pv-pill">${FEAT_DEF[lang][1]}</span></div>
     <button type="button" class="pv-nav prev" data-act="feat-step" data-d="-1" aria-label="السابق">${ic('down')}</button>
     <button type="button" class="pv-nav next" data-act="feat-step" data-d="1" aria-label="التالي">${ic('up')}</button></div>
     <div class="pv-dots" role="group" aria-label="شرائح الأكثر رواجاً">${it.map((_, k) => `<button type="button" data-act="feat-go" data-i="${k}" aria-label="الشريحة ${k + 1}" ${k === i ? 'aria-current="true"' : ''}></button>`).join('')}</div></div>`;
@@ -609,6 +610,8 @@ regions.featList = () => {
   const can = !full && progs.length + cats.length > 0;
   return `<h4 class="subh">العناصر المختارة <span class="count">${F.items.length}/10</span></h4>
     ${F.items.length ? `<ul class="rows" data-dnd-list="feat">${listRows('feat', F.items)}</ul>` : `<div class="empty">${ic('flame')}<strong>لم يُختر أي عنصر</strong><p>أضف برامج أو كتالوجات لتظهر في الشريط.</p></div>`}
+    ${F.items.length ? `<h4 class="subh">وصف العناصر <span class="muted">(اختياري، يظهر على الشريحة بكل لغة)</span></h4><div class="featdescs">${F.items.map((x, i) => { const o = x.type === 'catalog' ? findCat(x.id) : findProg(x.id); if (!o) return ''; const has = x.desc && Object.values(x.desc).some((v) => v); const key = x.type + ':' + x.id;
+      return `<details class="featdesc" data-fdkey="${esc(key)}" ${ui.fdOpen && ui.fdOpen[key] ? 'open' : ''}><summary>${esc(tt(o))} <span class="tagx ${has ? 'ok' : ''}">${has ? 'له وصف' : 'بلا وصف'}</span></summary>${locFields('fi' + i, 'desc', 'وصف قصير (حتى 160 حرفاً)')}</details>`; }).join('')}</div>` : ''}
     <div class="addbar"><label for="featAdd" class="sr">إضافة إلى الأكثر رواجاً</label><select id="featAdd" ${can ? '' : 'disabled'}>
       ${can ? '' : `<option>${full ? 'بلغت الحد الأقصى (10)' : 'كل العناصر مضافة'}</option>`}
       ${progs.length && !full ? `<optgroup label="برامج">${progs.map((p) => `<option value="program:${esc(p.id)}">${esc(tt(p))}${p.active ? '' : ' (غير مفعّل)'}</option>`).join('')}</optgroup>` : ''}
@@ -1095,7 +1098,7 @@ function onField(el, ev) {
     const sig = type === 'radio' ? `[data-f="${f}"][value="${v}"]` : `[data-f="${f}"]`;
     renderDrawer(false); const nf2 = $('#drawerBody ' + sig); if (nf2) nf2.focus(); return;
   }
-  if (ctx === 'set') validateSettingsUI(); else if (ctx === 'feat') validateFeatUI(); else validateEditorUI();
+  if (ctx === 'set') validateSettingsUI(); else if (ctx === 'feat') validateFeatUI(); else if (/^fi\d+$/.test(ctx)) { /* وصف عنصر مميز */ } else validateEditorUI();
   if (type === 'checkbox' && f === 'active') { /* مفتاح التفعيل داخل المحرر */ }
   if (ctx === 'prog' || ctx === 'cat') { if (f.startsWith('title.ar')) { const t = $('#drawerTitle'); if (!ui.edit.creating) t.textContent = (ctx === 'prog' ? 'تعديل البرنامج: ' : 'تعديل الكتالوج: ') + tt(o); } }
   refreshRegions();

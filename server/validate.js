@@ -165,7 +165,8 @@ function normalize(input) {
     if (!(type === 'catalog' ? catIds.has(id) : progIds.has(id))) { warnings.push(`عنصر في «الأكثر رواجاً» غير موجود (${type}:${id}) أُزيل`); continue; }
     if (seenF.has(type + id)) continue;
     seenF.add(type + id);
-    if (featured.items.length < 10) featured.items.push({ type, id });
+    const desc = loc(h.desc); for (const l of LANGS) desc[l] = desc[l].slice(0, 160);
+    if (featured.items.length < 10) featured.items.push(LANGS.some((l) => desc[l]) ? { type, id, desc } : { type, id });
   }
   if (featured.enabled && !featured.items.length) warnings.push('«الأكثر رواجاً» مفعّل لكن بلا عناصر — لن يظهر');
 

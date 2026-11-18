@@ -264,6 +264,23 @@ class _Slide extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (!tile.desc.isEmpty && tile.desc.of(lang).isNotEmpty) ...[
+                    SizedBox(height: context.d(10)),
+                    Text(
+                      tile.desc.of(lang),
+                      key: const Key('featured_desc'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: context.d(32),
+                        height: 1.3,
+                        color: Colors.white,
+                        shadows: const [
+                          Shadow(color: Color(0x99000000), blurRadius: 8),
+                        ],
+                      ),
+                    ),
+                  ],
                   SizedBox(height: context.d(18)),
                   Container(
                     padding: EdgeInsets.symmetric(
