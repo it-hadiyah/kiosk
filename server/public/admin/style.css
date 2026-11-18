@@ -520,3 +520,17 @@ body:not(.can-publish) #btnPublish, body:not(.can-publish) [data-act="publish"],
 .sev.error { background: var(--danger); } .sev.warn { background: var(--warn); } .sev.info { background: var(--brand); }
 .section-h { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin: var(--s5) 0 var(--s3); }
 .section-h h3 { margin: 0; }
+
+/* ===== مركز التشغيل (نظرة عامة) ===== */
+.stat.bad strong { color: var(--danger); }
+.count.bad { background: var(--danger-soft); color: var(--danger); }
+.dot.bad { background: var(--danger); }
+.alerts { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s3); }
+.warn-line { color: var(--warn-ink); font-weight: 600; }
+details.details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.details > summary::-webkit-details-marker { display: none; }
+details.details > summary::after { content: "▾"; color: var(--muted); }
+details.details[open] > summary::after { content: "▴"; }
+details.details > summary h3 { margin: 0; }
+details.details[open] > summary { margin-bottom: var(--s3); }
+.tbl td.yes { color: var(--ok-ink); font-weight: 700; } .tbl td.no { color: var(--danger); font-weight: 700; }

@@ -351,11 +351,11 @@ async function main() {
     await fetch(BASE + '/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'session_start', deviceId: 'e2e-kiosk', appVersion: '9.9.9' }) });
     await fetch(BASE + '/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'payment_completed', programId: 'zakat', durationMs: 12000, deviceId: 'e2e-kiosk' }) });
     await tab('overview');
-    await page.waitForFunction(() => ui.stats && document.querySelector('[data-region=ovStats]').textContent.includes('محاكاة مكتملة'), null, { timeout: 8000 });
-    ok((await page.textContent('[data-region=ovStats]')).includes('بيانات تجريبية'), 'overview stats labelled as demo data');
-    ok((await page.textContent('[data-region=ovDevices]')).includes('أجهزة الكيوسك'), 'overview has the kiosk devices section');
-    ok((await page.$$('[data-region=ovCards] .stat')).length === 6, 'overview shows 6 summary cards');
-    ok((await page.textContent('[data-region=ovTr]')).includes('العربية'), 'translations table rendered');
+    await page.waitForFunction(() => ui.ops && document.querySelector('[data-region=ovAlerts]'), null, { timeout: 8000 });
+    ok((await page.textContent('[data-region=ovAlerts]')).includes('مركز التنبيهات'), 'overview has the alerts center');
+    ok((await page.$$('[data-region=ovContent] .stat')).length === 6, 'overview shows 6 content indicators');
+    ok(await page.$('[data-region=ovOps]'), 'overview has the operations indicators');
+    ok((await page.textContent('[data-region=ovQualityBox]')).includes('الترجمات'), 'quality and translations details rendered');
     await shot('08-overview');
     await tab('media');
     await page.waitForSelector('.mcard');

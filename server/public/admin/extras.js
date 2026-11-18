@@ -53,7 +53,7 @@ async function onBoot() {
     new MutationObserver(() => lockUi()).observe($('#main'), { childList: true, subtree: true });
   }
 }
-const KEEP = '.navb,[data-act="close-editor"],[data-act="tab"],[data-act="edit-prog"],[data-act="edit-cat"],[data-act="pv-lang"],[data-act="pv-dev"],[data-act="feat-step"],[data-act="feat-go"],[data-q],[data-mq],[data-act="export"],[data-act="ov-open"],[data-act="media-copy"],[data-act="ov-refresh"],[data-act="media-filter"],[data-act="audit-refresh"],[data-act="dismiss-err"]';
+const KEEP = '.navb,[data-act="close-editor"],[data-act="tab"],[data-act="edit-prog"],[data-act="edit-cat"],[data-act="pv-lang"],[data-act="pv-dev"],[data-act="feat-step"],[data-act="feat-go"],[data-q],[data-mq],[data-act="export"],[data-act="ov-open"],[data-act="media-copy"],[data-act="ov-refresh"],[data-act="alert-open"],[data-act="alerts-all"],[data-act="open-device"],[data-act="media-filter"],[data-act="audit-refresh"],[data-act="dismiss-err"]';
 function lockUi() {
   if (!can('edit')) {
     $$('#view input,#view select,#view textarea,#view button,#drawerBody input,#drawerBody select,#drawerBody textarea,#drawerBody button,#drawerFoot button').forEach((el) => { if (!el.matches(KEEP) && !el.disabled) el.disabled = true; });

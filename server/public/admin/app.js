@@ -87,7 +87,7 @@ const serverBackend = {
     const d = await this._req('/api/login', { method: 'POST', auth: false, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
     this._setTk(d.token); return true;
   },
-  features: { roles: true, audit: true, stats: true, media: true, deleteMedia: true, devices: true },
+  features: { roles: true, audit: true, stats: true, media: true, deleteMedia: true, devices: true, ops: true, releases: true, preflight: true },
   async sessions() { return (await this._req('/api/admin/sessions')).sessions; },
   async createSession(label) { return (await this._req('/api/admin/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) })).session; },
   async endSession(id) { return this._req('/api/admin/sessions/' + id + '/end', { method: 'POST' }); },
@@ -98,7 +98,14 @@ const serverBackend = {
   async deleteMedia(name) { return this._req('/api/admin/media?name=' + encodeURIComponent(name), { method: 'DELETE' }); },
   async audit() { return (await this._req('/api/admin/audit')).entries; },
   async stats() { return (await this._req('/api/admin/stats')).stats; },
-  async dashboard(range) { return this._req('/api/admin/dashboard?range=' + encodeURIComponent(range)); },
+  async dashboard(range, mode) { return this._req('/api/admin/dashboard?range=' + encodeURIComponent(range) + (mode ? '&mode=' + mode : '')); },
+  async ops() { return this._req('/api/admin/ops'); },
+  async preflight() { return this._req('/api/admin/preflight'); },
+  async discard() { return this._req('/api/admin/discard', { method: 'POST' }); },
+  async releases() { return this._req('/api/admin/releases'); },
+  async historyItem(id) { return (await this._req('/api/admin/history/' + encodeURIComponent(id))).catalog; },
+  async deviceDetail(id) { return this._req('/api/admin/devices/' + encodeURIComponent(id)); },
+  async cleanupMedia() { return this._req('/api/admin/media?unused=1', { method: 'DELETE' }); },
   async resetStats() { return this._req('/api/admin/stats', { method: 'DELETE' }); },
   async load() { const d = await this._req('/api/admin/catalog'); return { catalog: d.catalog, hasUnpublished: !!d.hasUnpublished, liveUpdatedAt: d.liveUpdatedAt || '' }; },
   async save(catalog) {
