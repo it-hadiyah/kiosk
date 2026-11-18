@@ -220,7 +220,7 @@ function listMedia() {
 
 // ---------- إحصائيات المحاكاة (تجريبية — بلا بيانات شخصية) ----------
 let stats = null;
-function freshStats() { return { since: new Date().toISOString(), sessions: 0, started: 0, completed: 0, abandoned: 0, durationSum: 0, programs: {}, amounts: {}, devices: {}, daily: {} }; }
+function freshStats() { return { since: new Date().toISOString(), sessions: 0, started: 0, completed: 0, abandoned: 0, durationSum: 0, programs: {}, amounts: {}, devices: {}, daily: {}, byDay: {} }; }
 function loadStats() { if (stats) return stats; try { stats = readJson(STATS); } catch { stats = freshStats(); } return stats; }
 let statsTimer = null;
 function saveStatsSoon() { if (statsTimer) return; statsTimer = setTimeout(() => { statsTimer = null; try { writeJsonAtomic(STATS, stats); } catch (e) { console.error(e.message); } }, 5000); statsTimer.unref && statsTimer.unref(); }
@@ -232,26 +232,92 @@ function touchDevice(id, version, lang) {
   S.devices[key] = { lastSeen: new Date().toISOString(), version: String(version || prev.version || '').slice(0, 16), lang: String(lang || prev.lang || '').slice(0, 4) };
   saveStatsSoon();
 }
-const EVENT_TYPES = new Set(['session_start', 'program_selected', 'amount_chosen', 'payment_started', 'payment_completed', 'session_abandoned', 'heartbeat']);
+const EVENT_TYPES = new Set(['session_start', 'catalog_opened', 'program_selected', 'amount_chosen', 'payment_started', 'payment_completed', 'session_abandoned', 'heartbeat']);
+// اليوم بتوقيت المحلي للجمعية (الافتراضي السعودية UTC+3) كي تُحسب «اليوم» صحيحاً
+const TZ_HOURS = Number(process.env.TZ_OFFSET_HOURS ?? 3);
+const dayKey = (t = Date.now()) => new Date(t + TZ_HOURS * 3_600_000).toISOString().slice(0, 10);
+const cleanId = (v, n = 40) => (typeof v === 'string' ? v.replace(/[^\w-]/g, '').slice(0, n) : '');
+const newScope = () => ({ sessions: 0, completed: 0, abandoned: 0, amount: 0, durationSum: 0, programs: {}, catalogs: {} });
+/** يطبّق حدثاً على نطاق (يوم كامل أو جهاز داخل يوم). المبالغ تجريبية. */
+function applyEvent(sc, type, pid, cid, amount, durationMs) {
+  const prog = () => pid && (sc.programs[pid] || (Object.keys(sc.programs).length < 200 ? (sc.programs[pid] = { selected: 0, completed: 0, amount: 0 }) : null));
+  const cat = () => cid && (sc.catalogs[cid] || (Object.keys(sc.catalogs).length < 100 ? (sc.catalogs[cid] = { visits: 0, completed: 0, amount: 0 }) : null));
+  if (type === 'session_start') sc.sessions++;
+  else if (type === 'session_abandoned') sc.abandoned++;
+  else if (type === 'catalog_opened') { const c = cat(); if (c) c.visits++; }
+  else if (type === 'program_selected') { const q = prog(); if (q) q.selected++; }
+  else if (type === 'payment_completed') {
+    sc.completed++; sc.amount += amount;
+    if (durationMs > 0 && durationMs < 3_600_000) sc.durationSum += durationMs;
+    const q = prog(); if (q) { q.completed++; q.amount += amount; }
+    const c = cat(); if (c) { c.completed++; c.amount += amount; }
+  }
+}
 function recordEvent(e) {
   if (!e || !EVENT_TYPES.has(e.type)) return false;
-  const S = loadStats(); const day = new Date().toISOString().slice(0, 10);
+  const S = loadStats(); const day = dayKey();
   const D = S.daily[day] || (S.daily[day] = { sessions: 0, completed: 0 });
-  const pid = typeof e.programId === 'string' ? e.programId.replace(/[^\w-]/g, '').slice(0, 40) : '';
+  const pid = cleanId(e.programId), cid = cleanId(e.catalogId), did = cleanId(e.deviceId, 24);
+  const amount = (() => { const a = Math.round(Number(e.amount)); return a >= 1 && a <= 1e12 ? a : 0; })();
+  const dur = Number(e.durationMs) || 0;
+  // الإجماليات القديمة (متوافقة مع نظرة عامة)
   const P = pid && (S.programs[pid] || (Object.keys(S.programs).length < 200 ? (S.programs[pid] = { selected: 0, completed: 0 }) : null));
   switch (e.type) {
     case 'session_start': S.sessions++; D.sessions++; break;
     case 'program_selected': if (P) P.selected++; break;
-    case 'amount_chosen': { const a = Math.round(Number(e.amount)); if (a >= 1 && a <= 1e12) { const k = String(a); if (S.amounts[k] || Object.keys(S.amounts).length < 300) S.amounts[k] = (S.amounts[k] || 0) + 1; } break; }
+    case 'amount_chosen': if (amount) { const k = String(amount); if (S.amounts[k] || Object.keys(S.amounts).length < 300) S.amounts[k] = (S.amounts[k] || 0) + 1; } break;
     case 'payment_started': S.started++; break;
-    case 'payment_completed': S.completed++; D.completed++; if (P) P.completed++; { const d = Number(e.durationMs); if (d > 0 && d < 3_600_000) S.durationSum += d; } break;
+    case 'payment_completed': S.completed++; D.completed++; if (P) P.completed++; if (dur > 0 && dur < 3_600_000) S.durationSum += dur; break;
     case 'session_abandoned': S.abandoned++; break;
     default: break;
+  }
+  // تفصيل يومي: الإجمالي + لكل جهاز (للوحة المؤشرات)
+  if (e.type !== 'heartbeat' && e.type !== 'amount_chosen' && e.type !== 'payment_started') {
+    S.byDay = S.byDay || {};
+    const B = S.byDay[day] || (S.byDay[day] = { ...newScope(), devices: {} });
+    applyEvent(B, e.type, pid, cid, amount, dur);
+    if (did && (B.devices[did] || Object.keys(B.devices).length < 50)) applyEvent(B.devices[did] || (B.devices[did] = newScope()), e.type, pid, cid, amount, dur);
+    const days = Object.keys(S.byDay).sort(); for (const d of days.slice(0, Math.max(0, days.length - 120))) delete S.byDay[d];
   }
   const days = Object.keys(S.daily).sort(); for (const d of days.slice(0, Math.max(0, days.length - 60))) delete S.daily[d];
   touchDevice(e.deviceId, e.appVersion, e.lang);
   saveStatsSoon();
   return true;
+}
+/** يجمع أيام النطاق إلى نطاق واحد: عام + لكل جهاز، مع السلسلة اليومية. */
+function buildDashboard(range) {
+  const S = loadStats(); const byDay = S.byDay || {};
+  const today = dayKey();
+  const n = range === 'today' ? 1 : range === '7' ? 7 : range === '30' ? 30 : 0;
+  const cutoff = n ? dayKey(Date.now() - (n - 1) * 86_400_000) : '';
+  const days = Object.keys(byDay).filter((d) => d >= cutoff && d <= today).sort();
+  const total = () => ({ ...newScope(), byDay: [] });
+  const add = (into, sc) => {
+    for (const k of ['sessions', 'completed', 'abandoned', 'amount', 'durationSum']) into[k] += sc[k] || 0;
+    for (const [id, v] of Object.entries(sc.programs || {})) { const t = into.programs[id] || (into.programs[id] = { selected: 0, completed: 0, amount: 0 }); t.selected += v.selected; t.completed += v.completed; t.amount += v.amount; }
+    for (const [id, v] of Object.entries(sc.catalogs || {})) { const t = into.catalogs[id] || (into.catalogs[id] = { visits: 0, completed: 0, amount: 0 }); t.visits += v.visits; t.completed += v.completed; t.amount += v.amount; }
+  };
+  const all = total(); const devs = {};
+  // السلسلة اليومية: نملأ الأيام الفارغة داخل نطاق قصير كي يظهر الرسم متصلاً
+  const series = n ? Array.from({ length: n }, (_, i) => dayKey(Date.now() - (n - 1 - i) * 86_400_000)) : days;
+  for (const d of days) {
+    const B = byDay[d]; add(all, B);
+    for (const [did, sc] of Object.entries(B.devices || {})) add(devs[did] || (devs[did] = total()), sc);
+  }
+  for (const d of series) {
+    const B = byDay[d];
+    all.byDay.push({ date: d, sessions: B ? B.sessions : 0, completed: B ? B.completed : 0, amount: B ? B.amount : 0 });
+    for (const [did, t] of Object.entries(devs)) { const sc = B && B.devices && B.devices[did]; t.byDay.push({ date: d, sessions: sc ? sc.sessions : 0, completed: sc ? sc.completed : 0, amount: sc ? sc.amount : 0 }); }
+  }
+  const sortProg = (o) => Object.entries(o.programs).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.completed - a.completed || b.selected - a.selected);
+  const sortCat = (o) => Object.entries(o.catalogs).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.completed - a.completed || b.visits - a.visits);
+  const fin = (o) => ({ sessions: o.sessions, completed: o.completed, abandoned: o.abandoned, amount: o.amount, avgDurationSec: o.completed ? Math.round(o.durationSum / o.completed / 1000) : 0, programs: sortProg(o), catalogs: sortCat(o), byDay: o.byDay });
+  const meta = new Map(knownDevices().map((d) => [d.deviceId, d]));
+  const devices = Object.entries(devs).map(([deviceId, t]) => ({ deviceId, name: (meta.get(deviceId) || {}).name || deviceId, label: (meta.get(deviceId) || {}).label || '', status: (meta.get(deviceId) || {}).status || 'unknown', lastSeen: (meta.get(deviceId) || {}).lastSeen || '', ...fin(t) }));
+  // أجهزة مفعّلة لم تُسجَّل لها أحداث في النطاق: تظهر بأصفار
+  for (const [deviceId, d] of meta) if (!devs[deviceId]) devices.push({ deviceId, name: d.name || deviceId, label: d.label || '', status: d.status, lastSeen: d.lastSeen, ...fin(total()) });
+  devices.sort((a, b) => b.completed - a.completed || String(a.name).localeCompare(String(b.name), 'ar'));
+  return { demo: true, range: n ? range : 'all', since: S.since, days: days.length, ...fin(all), devices };
 }
 const evBucket = new Map(); // ip -> {n, reset}
 function eventAllowed(who) {
@@ -555,6 +621,11 @@ async function handle(req, res) {
     if (p === '/api/admin/stats' && m === 'GET') {
       if (!can(who, 'stats')) return forbid(res);
       return send(res, 200, { demo: true, stats: loadStats() });
+    }
+    if (p === '/api/admin/dashboard' && m === 'GET') {
+      if (!can(who, 'stats')) return forbid(res);
+      const range = ['today', '7', '30', 'all'].includes(url.searchParams.get('range')) ? url.searchParams.get('range') : '7';
+      return send(res, 200, buildDashboard(range));
     }
     if (p === '/api/admin/stats' && m === 'DELETE') {
       if (!can(who, 'publish')) return forbid(res);

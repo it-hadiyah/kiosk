@@ -211,3 +211,41 @@ test('per-kiosk visibility: restricted items reach only the chosen device; anony
   await as('manager', 'PUT', '/api/admin/catalog', { catalog: draft }); await as('manager', 'POST', '/api/admin/publish');
   assert.ok(ids(await get(tokB)).includes([...inCat][0]));
 });
+
+test('dashboard: totals, per-device, programs and catalogs (demo donations)', async () => {
+  await as('manager', 'DELETE', '/api/admin/stats');
+  const ev = (o) => api('POST', '/api/events', o);
+  const A = { deviceId: 'dashA', appVersion: '1' }, B = { deviceId: 'dashB', appVersion: '1' };
+  for (const e of [
+    { ...A, type: 'session_start' }, { ...A, type: 'catalog_opened', catalogId: 'c1' },
+    { ...A, type: 'program_selected', programId: 'zakat', catalogId: 'c1' },
+    { ...A, type: 'payment_completed', programId: 'zakat', catalogId: 'c1', amount: 100, durationMs: 10000 },
+    { ...A, type: 'session_start' }, { ...A, type: 'program_selected', programId: 'water' },
+    { ...A, type: 'payment_completed', programId: 'water', amount: 50, durationMs: 20000 },
+    { ...B, type: 'session_start' }, { ...B, type: 'session_abandoned' },
+    { ...B, type: 'session_start' }, { ...B, type: 'payment_completed', programId: 'zakat', amount: 30, durationMs: 6000 },
+    { ...B, type: 'payment_completed', programId: 'zakat', amount: -5 }, // مبلغ غير صالح يُحتسب بلا مبلغ
+  ]) assert.equal((await ev(e)).status, 200);
+
+  const d = (await as('manager', 'GET', '/api/admin/dashboard?range=all')).json;
+  assert.equal(d.demo, true);
+  assert.equal(d.completed, 4); assert.equal(d.amount, 180); assert.equal(d.sessions, 4); assert.equal(d.abandoned, 1);
+  assert.equal(d.avgDurationSec, Math.round((10000 + 20000 + 6000) / 4 / 1000));
+  const z = d.programs.find((p) => p.id === 'zakat'); assert.deepEqual([z.selected, z.completed, z.amount], [1, 3, 130]);
+  assert.equal(d.programs[0].id, 'zakat'); // الأكثر تبرعاً أولاً
+  const c1 = d.catalogs.find((c) => c.id === 'c1'); assert.deepEqual([c1.visits, c1.completed, c1.amount], [1, 1, 100]);
+  const da = d.devices.find((x) => x.deviceId === 'dashA'), db = d.devices.find((x) => x.deviceId === 'dashB');
+  assert.deepEqual([da.completed, da.amount, da.sessions], [2, 150, 2]);
+  assert.deepEqual([db.completed, db.amount, db.sessions, db.abandoned], [2, 30, 2, 1]);
+  assert.equal(da.programs[0].id, 'zakat' === da.programs[0].id ? 'zakat' : da.programs[0].id);
+  assert.equal(db.catalogs.length, 0); assert.equal(da.catalogs[0].id, 'c1');
+  // نطاق 7 أيام: سلسلة 7 أيام، آخرها اليوم بالمجاميع
+  const w = (await as('manager', 'GET', '/api/admin/dashboard?range=7')).json;
+  assert.equal(w.byDay.length, 7); assert.equal(w.byDay[6].completed, 4); assert.equal(w.byDay[6].amount, 180);
+  assert.equal(w.devices.find((x) => x.deviceId === 'dashA').byDay.length, 7);
+  assert.equal((await as('manager', 'GET', '/api/admin/dashboard?range=today')).json.completed, 4);
+  assert.equal((await as('viewer', 'GET', '/api/admin/dashboard')).status, 403);
+  assert.equal((await api('GET', '/api/admin/dashboard')).status, 401);
+  await as('manager', 'DELETE', '/api/admin/stats');
+  assert.equal((await as('manager', 'GET', '/api/admin/dashboard?range=all')).json.completed, 0);
+});
